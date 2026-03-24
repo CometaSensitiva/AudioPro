@@ -6,6 +6,7 @@
 import Foundation
 import AVFoundation
 import Combine
+import UniformTypeIdentifiers
 
 enum MetadataState: Equatable, Sendable {
     case loading
@@ -59,6 +60,20 @@ class AudioFile: ObservableObject, Identifiable, Equatable, Hashable {
         formatter.allowedUnits = [.useMB, .useKB]
         formatter.countStyle = .file
         return formatter.string(fromByteCount: size)
+    }
+
+    var isVideo: Bool {
+        let resourceValues = try? url.resourceValues(forKeys: [.contentTypeKey])
+        if let contentType = resourceValues?.contentType {
+            return contentType.conforms(to: .movie)
+        }
+
+        if let fallbackType = UTType(filenameExtension: url.pathExtension) {
+            return fallbackType.conforms(to: .movie)
+        }
+
+        let ext = url.pathExtension.lowercased()
+        return ["mp4", "mov", "mkv", "avi", "webm"].contains(ext)
     }
     
     /// Inizializza con caricamento automatico metadata

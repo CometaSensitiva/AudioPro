@@ -64,6 +64,41 @@ final class ExportPreviewTests: XCTestCase {
         XCTAssertEqual(preview.bitrateLabel, "96 kbps")
     }
 
+    func testSingleVideoEnablesCompressedVideoMode() {
+        var settings = CompressionSettings.medium
+        settings.exportMode = .videoCompressed
+
+        let file = mockFile(name: "lesson.mp4", duration: 2_400, size: 600_000_000, codec: "aac ")
+        let preview = ExportPreview.make(files: [file], compression: settings)
+
+        XCTAssertTrue(preview.isVideoCompressionEligible)
+        XCTAssertTrue(preview.isVideoModeActive)
+        XCTAssertEqual(preview.effectiveExportMode, .videoCompressed)
+        XCTAssertEqual(preview.compressionSummary, VideoCompressionPreset.teamsLecture.summary)
+        XCTAssertEqual(preview.estimatedOutputLabel, "—")
+        XCTAssertEqual(preview.savingsLabel, "—")
+    }
+
+    func testVideoModeFallsBackToAudioOnlyForMixedSelection() {
+        var settings = CompressionSettings.medium
+        settings.exportMode = .videoCompressed
+
+        let files = [
+            mockFile(name: "lesson.mp4", duration: 2_400, size: 600_000_000, codec: "aac "),
+            mockFile(name: "notes.m4a", duration: 120, size: 4_000_000, codec: "aac ")
+        ]
+
+        let preview = ExportPreview.make(files: files, compression: settings)
+
+        XCTAssertFalse(preview.isVideoCompressionEligible)
+        XCTAssertFalse(preview.isVideoModeActive)
+        XCTAssertEqual(preview.effectiveExportMode, .audioOnly)
+        XCTAssertEqual(
+            preview.videoModeAvailabilityMessage,
+            "Video compresso e disponibile solo con un singolo file video. Con piu file o sorgenti miste l'export resta solo audio."
+        )
+    }
+
     private func mockFile(name: String, duration: TimeInterval, size: Int64, codec: String) -> AudioFile {
         let file = AudioFile(url: URL(fileURLWithPath: "/tmp/\(name)"), loadMetadata: false)
         file.duration = duration

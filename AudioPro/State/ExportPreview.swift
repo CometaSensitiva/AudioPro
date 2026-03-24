@@ -29,7 +29,7 @@ struct ExportPreview: Equatable, Sendable {
     let resolvedBitrateKbps: Double?
     let estimatedOutputSizeMB: Double?
     let savingsRatio: Double?
-    let ffmpegSettings: FFmpegSettings?
+    let exportJob: ExportJob?
     let validation: ExportValidation
     let pendingMetadataCount: Int
     let failedMetadataCount: Int
@@ -38,12 +38,25 @@ struct ExportPreview: Equatable, Sendable {
     let sampleRate: SampleRate?
     let targetSizeMB: Double?
     let usesMergeReencodeFallback: Bool
+    let requestedExportMode: ExportMode
+    let effectiveExportMode: ExportMode
+    let isVideoCompressionEligible: Bool
+    let containsVideoFiles: Bool
+    let videoCompressionSummary: String?
+    let videoModeAvailabilityMessage: String?
 
     var canExport: Bool {
-        validation.canExport && ffmpegSettings != nil
+        validation.canExport && exportJob != nil
+    }
+
+    var isVideoModeActive: Bool {
+        effectiveExportMode == .videoCompressed
     }
 
     var bitrateLabel: String {
+        if isVideoModeActive {
+            return "—"
+        }
         if effectiveCodec == .copy {
             return "Originale"
         }
@@ -64,6 +77,9 @@ struct ExportPreview: Equatable, Sendable {
     }
 
     var estimatedOutputLabel: String {
+        if isVideoModeActive {
+            return "—"
+        }
         guard let estimatedOutputSizeMB else {
             return pendingMetadataCount > 0 ? "Analizzo..." : "—"
         }
@@ -71,6 +87,9 @@ struct ExportPreview: Equatable, Sendable {
     }
 
     var savingsLabel: String {
+        if isVideoModeActive {
+            return "—"
+        }
         guard let savingsRatio else {
             return pendingMetadataCount > 0 ? "Analizzo..." : "—"
         }
@@ -78,11 +97,15 @@ struct ExportPreview: Equatable, Sendable {
     }
 
     var targetSizeLabel: String? {
+        guard isVideoModeActive == false else { return nil }
         guard let targetSizeMB else { return nil }
         return String(format: "%.0f MB", targetSizeMB)
     }
 
     var compressionSummary: String {
+        if isVideoModeActive {
+            return videoCompressionSummary ?? effectiveExportMode.rawValue
+        }
         if effectiveCodec == .copy {
             return "Copia Stream"
         }
@@ -99,6 +122,9 @@ struct ExportPreview: Equatable, Sendable {
     }
 
     var inspectorStatusMessage: String? {
+        if let videoModeAvailabilityMessage {
+            return videoModeAvailabilityMessage
+        }
         if usesMergeReencodeFallback {
             return "Con piu file Copia Stream non e disponibile: l'export usera AAC per concatenare i contenuti."
         }
@@ -111,12 +137,24 @@ struct ExportPreview: Equatable, Sendable {
         let totalDuration = completeSum(files.map(\.duration), expectedCount: files.count)
         let totalFileSize = completeSum(files.map(\.fileSize), expectedCount: files.count)
         let originalAverageBitrateKbps = averageBitrate(totalBytes: totalFileSize, duration: totalDuration)
+        let containsVideoFiles = files.contains { $0.isVideo }
+        let isVideoCompressionEligible = files.count == 1 && files.first?.isVideo == true
+        let requestedExportMode = compression.exportMode
+        let effectiveExportMode = resolvedExportMode(
+            requestedMode: requestedExportMode,
+            isVideoCompressionEligible: isVideoCompressionEligible
+        )
+        let videoModeAvailabilityMessage = containsVideoFiles && isVideoCompressionEligible == false
+            ? "Video compresso e disponibile solo con un singolo file video. Con piu file o sorgenti miste l'export resta solo audio."
+            : nil
         let effectiveCodec = effectiveCodec(for: compression.codec, fileCount: files.count)
         let usesMergeReencodeFallback = compression.codec == .copy && effectiveCodec != .copy
 
         let validation: ExportValidation
         if files.isEmpty {
             validation = .invalidSelection(message: "Aggiungi almeno un file per esportare.")
+        } else if effectiveExportMode == .videoCompressed {
+            validation = .ready
         } else if compression.maxOutputSizeMB != nil && effectiveCodec != .copy && totalDuration == nil {
             if failedMetadataCount > 0 && pendingMetadataCount == 0 {
                 validation = .failedPreflight(message: "Impossibile calcolare il target in MB: mancano i metadata di uno o piu file.")
@@ -127,24 +165,34 @@ struct ExportPreview: Equatable, Sendable {
             validation = .ready
         }
 
-        let resolvedBitrateKbps = resolvedBitrate(
-            compression: compression,
-            totalDuration: totalDuration,
-            effectiveCodec: effectiveCodec
-        )
-        let ffmpegSettings = makeFFmpegSettings(
+        let resolvedBitrateKbps = effectiveExportMode == .audioOnly
+            ? resolvedBitrate(
+                compression: compression,
+                totalDuration: totalDuration,
+                effectiveCodec: effectiveCodec
+            )
+            : nil
+        let exportJob = makeExportJob(
             compression: compression,
             resolvedBitrateKbps: resolvedBitrateKbps,
             effectiveCodec: effectiveCodec,
+            effectiveExportMode: effectiveExportMode,
             validation: validation
         )
-        let estimatedOutputSizeMB = estimateOutputSizeMB(
-            totalDuration: totalDuration,
-            totalFileSize: totalFileSize,
-            resolvedBitrateKbps: resolvedBitrateKbps,
-            effectiveCodec: effectiveCodec
-        )
-        let savingsRatio = savingsRatio(totalFileSize: totalFileSize, estimatedOutputSizeMB: estimatedOutputSizeMB)
+        let estimatedOutputSizeMB = effectiveExportMode == .audioOnly
+            ? estimateOutputSizeMB(
+                totalDuration: totalDuration,
+                totalFileSize: totalFileSize,
+                resolvedBitrateKbps: resolvedBitrateKbps,
+                effectiveCodec: effectiveCodec
+            )
+            : nil
+        let savingsRatio = effectiveExportMode == .audioOnly
+            ? savingsRatio(totalFileSize: totalFileSize, estimatedOutputSizeMB: estimatedOutputSizeMB)
+            : nil
+        let videoCompressionSummary = effectiveExportMode == .videoCompressed
+            ? VideoCompressionPreset.teamsLecture.summary
+            : nil
 
         return ExportPreview(
             fileCount: files.count,
@@ -154,16 +202,32 @@ struct ExportPreview: Equatable, Sendable {
             resolvedBitrateKbps: resolvedBitrateKbps,
             estimatedOutputSizeMB: estimatedOutputSizeMB,
             savingsRatio: savingsRatio,
-            ffmpegSettings: ffmpegSettings,
+            exportJob: exportJob,
             validation: validation,
             pendingMetadataCount: pendingMetadataCount,
             failedMetadataCount: failedMetadataCount,
             selectedCodec: compression.codec,
             effectiveCodec: effectiveCodec,
-            sampleRate: effectiveCodec == .copy ? nil : compression.sampleRate,
-            targetSizeMB: compression.maxOutputSizeMB,
-            usesMergeReencodeFallback: usesMergeReencodeFallback
+            sampleRate: effectiveExportMode == .videoCompressed || effectiveCodec == .copy ? nil : compression.sampleRate,
+            targetSizeMB: effectiveExportMode == .videoCompressed ? nil : compression.maxOutputSizeMB,
+            usesMergeReencodeFallback: effectiveExportMode == .audioOnly ? usesMergeReencodeFallback : false,
+            requestedExportMode: requestedExportMode,
+            effectiveExportMode: effectiveExportMode,
+            isVideoCompressionEligible: isVideoCompressionEligible,
+            containsVideoFiles: containsVideoFiles,
+            videoCompressionSummary: videoCompressionSummary,
+            videoModeAvailabilityMessage: videoModeAvailabilityMessage
         )
+    }
+
+    private static func resolvedExportMode(
+        requestedMode: ExportMode,
+        isVideoCompressionEligible: Bool
+    ) -> ExportMode {
+        if requestedMode == .videoCompressed && isVideoCompressionEligible {
+            return .videoCompressed
+        }
+        return .audioOnly
     }
 
     private static func effectiveCodec(for selectedCodec: Codec, fileCount: Int) -> Codec {
@@ -190,13 +254,18 @@ struct ExportPreview: Equatable, Sendable {
         return compression.baseBitrateKbps
     }
 
-    private static func makeFFmpegSettings(
+    private static func makeExportJob(
         compression: CompressionSettings,
         resolvedBitrateKbps: Double?,
         effectiveCodec: Codec,
+        effectiveExportMode: ExportMode,
         validation: ExportValidation
-    ) -> FFmpegSettings? {
+    ) -> ExportJob? {
         guard validation.canExport else { return nil }
+
+        if effectiveExportMode == .videoCompressed {
+            return .videoCompressed(.teamsLecture)
+        }
 
         let codec: String
         switch effectiveCodec {
@@ -217,11 +286,7 @@ struct ExportPreview: Equatable, Sendable {
             bitrate = ""
         }
 
-        return FFmpegSettings(
-            codec: codec,
-            bitrate: bitrate,
-            sampleRate: compression.ffmpegSampleRate
-        )
+        return .audio(AudioExportSettings(codec: codec, bitrate: bitrate, sampleRate: compression.ffmpegSampleRate))
     }
 
     private static func estimateOutputSizeMB(

@@ -2,11 +2,18 @@ import Foundation
 import SwiftUI
 import Combine
 import AppKit
+import UniformTypeIdentifiers
 
 /// Stato condiviso dell'app: file caricati, selezione, ricerca, impostazioni di compressione e stato di processing.
 @MainActor
 final class AudioAppState: ObservableObject {
     private static let sharedProcessor = AudioProcessor()
+
+    struct ExportDestinationDefaults: Equatable {
+        let fileName: String
+        let allowedContentTypes: [UTType]
+        let message: String
+    }
 
     @Published var audioFiles: [AudioFile] = []
     @Published var selectedFile: AudioFile?
@@ -40,6 +47,23 @@ final class AudioAppState: ObservableObject {
 
     var totalDuration: TimeInterval? {
         exportPreview.totalDuration
+    }
+
+    var exportDestinationDefaults: ExportDestinationDefaults {
+        switch exportPreview.effectiveExportMode {
+        case .audioOnly:
+            return ExportDestinationDefaults(
+                fileName: "Export.m4a",
+                allowedContentTypes: [.mpeg4Audio],
+                message: "Salva come M4A (audio)"
+            )
+        case .videoCompressed:
+            return ExportDestinationDefaults(
+                fileName: "Export.mp4",
+                allowedContentTypes: [.mpeg4Movie],
+                message: "Salva come MP4 compresso"
+            )
+        }
     }
 
     var isExportActionEnabled: Bool {
@@ -130,7 +154,7 @@ final class AudioAppState: ObservableObject {
         guard processingState.canStartNewExport else { return }
 
         let preview = exportPreview
-        guard preview.canExport, let ffmpegSettings = preview.ffmpegSettings else {
+        guard preview.canExport, let exportJob = preview.exportJob else {
             if let message = preview.validation.message {
                 processingState = .failed(message: message)
             }
@@ -145,7 +169,7 @@ final class AudioAppState: ObservableObject {
             let result = await processor.process(
                 fileURLs: fileURLs,
                 outputURL: outputURL,
-                settings: ffmpegSettings,
+                job: exportJob,
                 estimatedTotalDuration: preview.totalDuration,
                 progressCallback: { @MainActor progress in
                     self.updateProgress(progress)
@@ -183,9 +207,18 @@ final class AudioAppState: ObservableObject {
     }
     
     private func markReadyForNextExport() {
+        normalizeExportModeIfNeeded()
         if case .running = processingState { return }
         if processingState != .idle {
             processingState = .idle
+        }
+    }
+
+    private func normalizeExportModeIfNeeded() {
+        guard compression.exportMode == .videoCompressed else { return }
+        guard audioFiles.count == 1, audioFiles.first?.isVideo == true else {
+            compression.exportMode = .audioOnly
+            return
         }
     }
 
@@ -230,6 +263,7 @@ struct CompressionSettings: Equatable, Sendable {
     var sampleRate: SampleRate
     var codec: Codec
     var preset: Preset
+    var exportMode: ExportMode
     var maxOutputSizeMB: Double? = nil
     
     var bitrateLabel: String {
@@ -299,7 +333,14 @@ struct CompressionSettings: Equatable, Sendable {
                                             sampleRate: .s44100,
                                             codec: .aac,
                                             preset: .medium,
+                                            exportMode: .audioOnly,
                                             maxOutputSizeMB: nil)
+
+    func preservingExportMode(_ exportMode: ExportMode) -> CompressionSettings {
+        var copy = self
+        copy.exportMode = exportMode
+        return copy
+    }
 }
 
 enum SampleRate: String, CaseIterable, Identifiable, Sendable {

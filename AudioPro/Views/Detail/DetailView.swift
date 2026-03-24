@@ -122,10 +122,11 @@ struct DetailView: View {
     
     private func startExportFlow() {
         guard appState.isExportActionEnabled else { return }
+        let defaults = appState.exportDestinationDefaults
         let panel = NSSavePanel()
-        panel.allowedContentTypes = [UTType.mpeg4Audio, UTType.mpeg4Movie]
-        panel.nameFieldStringValue = "Export.m4a"
-        panel.message = "Salva come M4A (audio) o MP4"
+        panel.allowedContentTypes = defaults.allowedContentTypes
+        panel.nameFieldStringValue = defaults.fileName
+        panel.message = defaults.message
         panel.begin { response in
             if response == .OK, let url = panel.url {
                 appState.startExport(to: url)

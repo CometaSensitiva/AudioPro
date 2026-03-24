@@ -123,6 +123,49 @@ final class AudioAppStateTests: XCTestCase {
 
         wait(for: [expectation], timeout: 1.0)
     }
+
+    func testVideoExportModeResetsToAudioOnlyWhenSelectionChanges() {
+        let state = AudioAppState()
+        let video = AudioFile(url: URL(fileURLWithPath: "/tmp/lesson.mp4"), loadMetadata: false)
+        let audio = AudioFile(url: URL(fileURLWithPath: "/tmp/notes.m4a"), loadMetadata: false)
+        state.addFiles([video])
+        state.compression.exportMode = .videoCompressed
+
+        state.addFiles([audio])
+
+        XCTAssertEqual(state.compression.exportMode, .audioOnly)
+    }
+
+    func testExportModeSwitchPreservesAudioSettings() {
+        let state = AudioAppState()
+        state.compression.codec = .opus
+        state.compression.sampleRate = .s48000
+        state.compression.quality = 0.85
+        state.compression.maxOutputSizeMB = 90
+
+        state.compression.exportMode = .videoCompressed
+        state.compression.exportMode = .audioOnly
+
+        XCTAssertEqual(state.compression.codec, .opus)
+        XCTAssertEqual(state.compression.sampleRate, .s48000)
+        XCTAssertEqual(state.compression.quality, 0.85)
+        XCTAssertEqual(state.compression.maxOutputSizeMB, 90)
+    }
+
+    func testExportDestinationDefaultsFollowEffectiveExportMode() {
+        let state = AudioAppState()
+        let video = AudioFile(url: URL(fileURLWithPath: "/tmp/lesson.mp4"), loadMetadata: false)
+        state.addFiles([video])
+        state.compression.exportMode = .videoCompressed
+
+        XCTAssertEqual(state.exportDestinationDefaults.fileName, "Export.mp4")
+        XCTAssertEqual(state.exportDestinationDefaults.allowedContentTypes, [.mpeg4Movie])
+
+        state.compression.exportMode = .audioOnly
+
+        XCTAssertEqual(state.exportDestinationDefaults.fileName, "Export.m4a")
+        XCTAssertEqual(state.exportDestinationDefaults.allowedContentTypes, [.mpeg4Audio])
+    }
     
     // MARK: - Helpers
     

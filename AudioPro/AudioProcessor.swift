@@ -8,11 +8,111 @@ import SwiftUI
 import CryptoKit
 import Security
 
-/// Impostazioni ffmpeg pre-calcolate per evitare problemi di isolamento MainActor
-struct FFmpegSettings: Sendable, Equatable {
-    let codec: String
-    let bitrate: String
-    let sampleRate: String
+enum FFmpegCommandBuilder {
+    enum BuilderError: LocalizedError, Equatable {
+        case videoCompressionRequiresSingleVideo
+
+        var errorDescription: String? {
+            switch self {
+            case .videoCompressionRequiresSingleVideo:
+                return "La compressione video richiede un singolo file video in input."
+            }
+        }
+    }
+
+    nonisolated static func makeArguments(fileURLs: [URL], outputURL: URL, job: ExportJob) throws -> [String] {
+        switch job {
+        case .audio(let settings):
+            if fileURLs.count == 1, let fileURL = fileURLs.first {
+                return makeSingleAudioArguments(fileURL: fileURL, outputURL: outputURL, settings: settings)
+            }
+            return makeMergedAudioArguments(fileURLs: fileURLs, outputURL: outputURL, settings: settings)
+        case .videoCompressed(let preset):
+            guard fileURLs.count == 1, let fileURL = fileURLs.first else {
+                throw BuilderError.videoCompressionRequiresSingleVideo
+            }
+            return makeVideoCompressionArguments(fileURL: fileURL, outputURL: outputURL, preset: preset)
+        }
+    }
+
+    private nonisolated static func makeSingleAudioArguments(
+        fileURL: URL,
+        outputURL: URL,
+        settings: AudioExportSettings
+    ) -> [String] {
+        var arguments = [
+            "-i", fileURL.path,
+            "-vn",
+        ]
+
+        if settings.codec == "copy" {
+            arguments.append(contentsOf: ["-c:a", "copy"])
+        } else {
+            arguments.append(contentsOf: [
+                "-c:a", settings.codec,
+                "-b:a", settings.bitrate,
+                "-ar", settings.sampleRate,
+            ])
+        }
+
+        arguments.append(contentsOf: [
+            "-y",
+            outputURL.path
+        ])
+
+        return arguments
+    }
+
+    private nonisolated static func makeMergedAudioArguments(
+        fileURLs: [URL],
+        outputURL: URL,
+        settings: AudioExportSettings
+    ) -> [String] {
+        var arguments: [String] = []
+
+        for url in fileURLs {
+            arguments.append(contentsOf: ["-i", url.path])
+        }
+
+        let filterInputs = (0..<fileURLs.count).map { "[\($0):a]" }.joined()
+        let filterComplex = "\(filterInputs)concat=n=\(fileURLs.count):v=0:a=1[outa]"
+
+        arguments.append(contentsOf: [
+            "-filter_complex", filterComplex,
+            "-map", "[outa]",
+            "-vn",
+        ])
+
+        let codec = settings.codec == "copy" ? "aac" : settings.codec
+        arguments.append(contentsOf: [
+            "-c:a", codec,
+            "-b:a", settings.bitrate,
+            "-ar", settings.sampleRate,
+            "-y",
+            outputURL.path
+        ])
+
+        return arguments
+    }
+
+    private nonisolated static func makeVideoCompressionArguments(
+        fileURL: URL,
+        outputURL: URL,
+        preset: VideoCompressionPreset
+    ) -> [String] {
+        [
+            "-i", fileURL.path,
+            "-map", "0:v:0",
+            "-map", "0:a?",
+            "-c:v", preset.videoCodec,
+            "-b:v", preset.videoBitrate,
+            "-tag:v", preset.videoTag,
+            "-vf", preset.videoFilter,
+            "-c:a", preset.audioCodec,
+            "-y",
+            outputURL.path
+        ]
+    }
 }
 
 final class AudioProcessor {
@@ -96,6 +196,7 @@ final class AudioProcessor {
         case ffmpegNotExecutable
         case ffmpegIntegrityCheckFailed
         case ffmpegFailed(String)
+        case unsupportedCommandConfiguration(String)
         case fileCreationFailed
         case cancelled
         
@@ -109,6 +210,8 @@ final class AudioProcessor {
                 return "Il binario ffmpeg nel bundle non supera il controllo di integrita"
             case .ffmpegFailed(let message):
                 return "Errore ffmpeg: \(message)"
+            case .unsupportedCommandConfiguration(let message):
+                return message
             case .fileCreationFailed:
                 return "Impossibile creare il file temporaneo"
             case .cancelled:
@@ -129,7 +232,7 @@ final class AudioProcessor {
     nonisolated func process(
         fileURLs: [URL],
         outputURL: URL,
-        settings: FFmpegSettings,
+        job: ExportJob,
         estimatedTotalDuration: Double? = nil,
         progressCallback: ProgressCallback? = nil
     ) async -> Result<Void, ProcessError> {
@@ -144,25 +247,26 @@ final class AudioProcessor {
                 return .failure(error)
             }
 
-            if fileURLs.count == 1, let first = fileURLs.first {
-                return await compressSingleFile(
-                    fileURL: first,
-                    outputURL: outputURL,
-                    settings: settings,
-                    ffmpegPath: ffmpegPath,
-                    estimatedTotalDuration: estimatedTotalDuration,
-                    progressCallback: progressCallback
-                )
-            } else {
-                return await mergeFiles(
+            let arguments: [String]
+            do {
+                arguments = try FFmpegCommandBuilder.makeArguments(
                     fileURLs: fileURLs,
                     outputURL: outputURL,
-                    settings: settings,
-                    ffmpegPath: ffmpegPath,
-                    estimatedTotalDuration: estimatedTotalDuration,
-                    progressCallback: progressCallback
+                    job: job
                 )
+            } catch let error as FFmpegCommandBuilder.BuilderError {
+                return .failure(.unsupportedCommandConfiguration(error.localizedDescription))
+            } catch {
+                return .failure(.unsupportedCommandConfiguration(error.localizedDescription))
             }
+
+            return await runFFmpeg(
+                path: ffmpegPath,
+                arguments: arguments,
+                inputCount: fileURLs.count,
+                estimatedTotalDuration: estimatedTotalDuration ?? 0,
+                progressCallback: progressCallback
+            )
         }.value
     }
     
@@ -239,100 +343,6 @@ final class AudioProcessor {
 
         return Self.allowedFFmpegSHA256ByVariant.values.contains(hex)
     }
-    
-    // MARK: - Compressione file singolo
-    
-    /// Comprime un singolo file audio
-    private nonisolated func compressSingleFile(
-        fileURL: URL,
-        outputURL: URL,
-        settings: FFmpegSettings,
-        ffmpegPath: String,
-        estimatedTotalDuration: Double?,
-        progressCallback: ProgressCallback?
-    ) async -> Result<Void, ProcessError> {
-        var arguments = [
-            "-i", fileURL.path,           // Input
-            "-vn",                          // Scarta stream video (supporto MP4→M4A)
-        ]
-        
-        // Se codec è "copy", copia lo stream audio senza ri-codifica
-        if settings.codec == "copy" {
-            arguments.append(contentsOf: [
-                "-c:a", "copy",              // Stream copy (veloce, lossless)
-            ])
-        } else {
-            arguments.append(contentsOf: [
-                "-c:a", settings.codec,       // Codec audio
-                "-b:a", settings.bitrate,     // Bitrate
-                "-ar", settings.sampleRate,   // Sample rate
-            ])
-        }
-        
-        arguments.append(contentsOf: [
-            "-y",                           // Sovrascrivi se esiste
-            outputURL.path                  // Output
-        ])
-        
-        return await runFFmpeg(
-            path: ffmpegPath,
-            arguments: arguments,
-            inputCount: 1,
-            estimatedTotalDuration: estimatedTotalDuration ?? 0,
-            progressCallback: progressCallback
-        )
-    }
-    
-    // MARK: - Merge multipli file
-    
-    /// Merge di più file con ricodifica
-    /// Strategia: usiamo il concat filter con ricodifica
-    private nonisolated func mergeFiles(
-        fileURLs: [URL],
-        outputURL: URL,
-        settings: FFmpegSettings,
-        ffmpegPath: String,
-        estimatedTotalDuration: Double?,
-        progressCallback: ProgressCallback?
-    ) async -> Result<Void, ProcessError> {
-        // Costruiamo gli input per ffmpeg
-        var arguments: [String] = []
-        
-        // Aggiungiamo tutti gli input
-        for url in fileURLs {
-            arguments.append(contentsOf: ["-i", url.path])
-        }
-        
-        // Creiamo il filter complex per concatenare (solo stream audio)
-        let filterInputs = (0..<fileURLs.count).map { "[\($0):a]" }.joined()
-        let filterComplex = "\(filterInputs)concat=n=\(fileURLs.count):v=0:a=1[outa]"
-        
-        arguments.append(contentsOf: [
-            "-filter_complex", filterComplex,  // Filter per concat
-            "-map", "[outa]",                  // Mappa l'output del filter
-            "-vn",                             // Scarta video (supporto MP4)
-        ])
-        
-        // Stream copy non è possibile con concat filter, forza ri-codifica
-        let codec = settings.codec == "copy" ? "aac" : settings.codec
-        arguments.append(contentsOf: [
-            "-c:a", codec,                     // Codec audio
-            "-b:a", settings.bitrate,          // Bitrate
-            "-ar", settings.sampleRate,        // Sample rate
-            "-y",                              // Sovrascrivi
-            outputURL.path                     // Output
-        ])
-        
-        return await runFFmpeg(
-            path: ffmpegPath,
-            arguments: arguments,
-            inputCount: fileURLs.count,
-            estimatedTotalDuration: estimatedTotalDuration ?? 0,
-            progressCallback: progressCallback
-        )
-    }
-    
-
     
     // MARK: - Esecuzione ffmpeg
     

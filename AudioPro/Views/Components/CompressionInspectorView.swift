@@ -12,6 +12,7 @@ struct CompressionInspectorView: View {
     }
 
     private enum InspectorField {
+        case exportMode
         case preset
         case maxSize
         case applyTarget
@@ -25,16 +26,17 @@ struct CompressionInspectorView: View {
 
     var body: some View {
         Form {
+            outputModeSection
             summarySection
             primarySection
             advancedSection
 
-            if hasVideoFiles {
+            if let videoCapabilityNoticeMessage {
                 Section {
                     noticePanel(
-                        icon: "film",
-                        title: "File video rilevati",
-                        message: "I file video verranno convertiti in solo audio durante l'export."
+                        icon: "film.stack",
+                        title: "Video compresso non disponibile",
+                        message: videoCapabilityNoticeMessage
                     )
                 }
             }
@@ -44,7 +46,8 @@ struct CompressionInspectorView: View {
                     Spacer()
                     tracked(.reset) {
                         Button {
-                            appState.compression = .medium
+                            appState.compression = CompressionSettings.medium
+                                .preservingExportMode(appState.compression.exportMode)
                             syncMaxSizeInput()
                         } label: {
                             Label("Ripristina standard", systemImage: "arrow.counterclockwise")
@@ -68,6 +71,36 @@ struct CompressionInspectorView: View {
         }
     }
 
+    @ViewBuilder
+    private var outputModeSection: some View {
+        if preview.isVideoCompressionEligible {
+            Section("Output") {
+                tracked(.exportMode) {
+                    Picker("Output", selection: binding(\.exportMode)) {
+                        ForEach(ExportMode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                if preview.isVideoModeActive {
+                    noticePanel(
+                        icon: "video.badge.waveform",
+                        title: "Preset video fisso",
+                        message: VideoCompressionPreset.teamsLecture.inspectorMessage
+                    )
+                } else {
+                    noticePanel(
+                        icon: "waveform",
+                        title: "Solo audio",
+                        message: "Il video viene usato come sorgente, ma l'export finale resta audio-only."
+                    )
+                }
+            }
+        }
+    }
+
     private var summarySection: some View {
         Section {
             LabeledContent("Profilo attivo") {
@@ -83,7 +116,7 @@ struct CompressionInspectorView: View {
                 }
             }
 
-            LabeledContent("Bitrate stimato") {
+            LabeledContent(summarySecondaryLabel) {
                 Text(activeBitrateSummary)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -103,13 +136,19 @@ struct CompressionInspectorView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         } footer: {
-            Text("Regola il risultato in modo rapido con preset e target; apri Avanzate solo se vuoi intervenire su codec, qualità fine o sample rate.")
+            Text(summaryFooterText)
         }
     }
 
     private var primarySection: some View {
         Section("Rapido") {
-            if appState.compression.codec == .copy {
+            if preview.isVideoModeActive {
+                noticePanel(
+                    icon: "video.fill",
+                    title: "Video compresso attivo",
+                    message: VideoCompressionPreset.teamsLecture.inspectorMessage
+                )
+            } else if appState.compression.codec == .copy {
                 tracked(.copyMode) {
                     noticePanel(
                         icon: "bolt.horizontal.circle",
@@ -202,83 +241,94 @@ struct CompressionInspectorView: View {
 
     private var advancedSection: some View {
         Section("Tecnico") {
-            DisclosureGroup(isExpanded: $isAdvancedExpanded) {
-                VStack(alignment: .leading, spacing: 14) {
-                    tracked(.codec) {
-                        compactPickerRow(
-                            title: "Codec",
-                            selection: binding(\.codec),
-                            values: Codec.allCases
-                        )
-                    }
+            if preview.isVideoModeActive {
+                noticePanel(
+                    icon: "lock.rectangle.stack",
+                    title: "Controlli tecnici sospesi",
+                    message: "In Video compresso usiamo un preset fisso. Codec audio, qualità fine, sample rate e target MB restano memorizzati per quando torni a Solo audio."
+                )
+            } else {
+                DisclosureGroup(isExpanded: $isAdvancedExpanded) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        tracked(.codec) {
+                            compactPickerRow(
+                                title: "Codec",
+                                selection: binding(\.codec),
+                                values: Codec.allCases
+                            )
+                        }
 
-                    if appState.compression.codec == .copy {
-                        tracked(.copyMode) {
-                            Text("In Copia Stream il codec originale viene mantenuto e le altre regolazioni non intervengono.")
+                        if appState.compression.codec == .copy {
+                            tracked(.copyMode) {
+                                Text("In Copia Stream il codec originale viene mantenuto e le altre regolazioni non intervengono.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } else {
+                            Divider()
+
+                            tracked(.quality) {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    LabeledContent("Qualità") {
+                                        Text(preview.bitrateLabel)
+                                            .foregroundStyle(.secondary)
+                                            .monospacedDigit()
+                                    }
+
+                                    Slider(value: binding(\.quality), in: 0...1)
+                                        .disabled(appState.compression.maxOutputSizeMB != nil)
+
+                                    HStack {
+                                        Text("Più leggero")
+                                        Spacer()
+                                        Text("Più fedele")
+                                    }
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+
+                                    if appState.compression.maxOutputSizeMB != nil {
+                                        Text("Con una dimensione massima impostata, il bitrate viene adattato automaticamente e questo cursore resta in standby.")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                                .opacity(appState.compression.maxOutputSizeMB != nil ? 0.65 : 1)
+                            }
+
+                            Divider()
+
+                            tracked(.sampleRate) {
+                                compactPickerRow(
+                                    title: "Sample rate",
+                                    selection: binding(\.sampleRate),
+                                    values: SampleRate.allCases
+                                )
+                            }
+                        }
+                    }
+                    .padding(.top, 10)
+                } label: {
+                    tracked(.advanced) {
+                        HStack(spacing: 10) {
+                            Label("Avanzate", systemImage: "slider.horizontal.3")
+                                .labelStyle(.titleAndIcon)
+                            Spacer()
+                            Text(advancedSummary)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-                    } else {
-                        Divider()
-
-                        tracked(.quality) {
-                            VStack(alignment: .leading, spacing: 10) {
-                                LabeledContent("Qualità") {
-                                    Text(preview.bitrateLabel)
-                                        .foregroundStyle(.secondary)
-                                        .monospacedDigit()
-                                }
-
-                                Slider(value: binding(\.quality), in: 0...1)
-                                    .disabled(appState.compression.maxOutputSizeMB != nil)
-
-                                HStack {
-                                    Text("Più leggero")
-                                    Spacer()
-                                    Text("Più fedele")
-                                }
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-
-                                if appState.compression.maxOutputSizeMB != nil {
-                                    Text("Con una dimensione massima impostata, il bitrate viene adattato automaticamente e questo cursore resta in standby.")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                            }
-                            .opacity(appState.compression.maxOutputSizeMB != nil ? 0.65 : 1)
-                        }
-
-                        Divider()
-
-                        tracked(.sampleRate) {
-                            compactPickerRow(
-                                title: "Sample rate",
-                                selection: binding(\.sampleRate),
-                                values: SampleRate.allCases
-                            )
-                        }
                     }
                 }
-                .padding(.top, 10)
-            } label: {
-                tracked(.advanced) {
-                    HStack(spacing: 10) {
-                        Label("Avanzate", systemImage: "slider.horizontal.3")
-                            .labelStyle(.titleAndIcon)
-                        Spacer()
-                        Text(advancedSummary)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                .tint(.primary)
             }
-            .tint(.primary)
         }
     }
 
     private var advancedSummary: String {
+        if preview.isVideoModeActive {
+            return "Preset video fisso"
+        }
         if preview.effectiveCodec == .copy {
             return "Copia Stream"
         }
@@ -286,6 +336,9 @@ struct CompressionInspectorView: View {
     }
 
     private var activeCompressionModeLabel: String {
+        if preview.isVideoModeActive {
+            return "Video compresso"
+        }
         if preview.usesMergeReencodeFallback {
             return "Merge ricodificato"
         }
@@ -299,7 +352,21 @@ struct CompressionInspectorView: View {
     }
 
     private var activeBitrateSummary: String {
-        preview.bitrateLabel
+        if preview.isVideoModeActive {
+            return VideoCompressionPreset.teamsLecture.summary
+        }
+        return preview.bitrateLabel
+    }
+
+    private var summarySecondaryLabel: String {
+        preview.isVideoModeActive ? "Preset video" : "Bitrate stimato"
+    }
+
+    private var summaryFooterText: String {
+        if preview.isVideoModeActive {
+            return "La modalità video usa un preset fisso. Per tornare a codec, qualità fine, sample rate o target MB seleziona Solo audio."
+        }
+        return "Regola il risultato in modo rapido con preset e target; apri Avanzate solo se vuoi intervenire su codec, qualità fine o sample rate."
     }
 
     private var maxSizeCaption: String {
@@ -351,11 +418,8 @@ struct CompressionInspectorView: View {
         return appState.compression.maxOutputSizeMB != parsedDraftMaxSizeMB
     }
 
-    private var hasVideoFiles: Bool {
-        appState.audioFiles.contains { file in
-            let ext = file.url.pathExtension.lowercased()
-            return ["mp4", "mov", "mkv", "avi", "webm"].contains(ext)
-        }
+    private var videoCapabilityNoticeMessage: String? {
+        preview.videoModeAvailabilityMessage
     }
 
     private func compactPickerRow<Value: Hashable & Identifiable & RawRepresentable>(
@@ -402,6 +466,8 @@ struct CompressionInspectorView: View {
         switch field {
         case .preset:
             return "Profilo rapido di compressione."
+        case .exportMode:
+            return "Scegli se esportare solo audio oppure mantenere e comprimere il video."
         case .maxSize:
             return "Limite opzionale della dimensione finale in MB."
         case .applyTarget:
