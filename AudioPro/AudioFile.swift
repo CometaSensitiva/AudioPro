@@ -33,7 +33,7 @@ class AudioFile: ObservableObject, Identifiable, Equatable, Hashable {
         let metadataState: MetadataState
     }
 
-    let id = UUID()
+    nonisolated let id = UUID()
     @Published var url: URL
     private let securityScopedURL: URL?
     
@@ -156,6 +156,6 @@ class AudioFile: ObservableObject, Identifiable, Equatable, Hashable {
         return String(bytes: chars, encoding: .ascii) ?? "unknown"
     }
     
-    static func == (lhs: AudioFile, rhs: AudioFile) -> Bool { lhs.id == rhs.id }
+    nonisolated static func == (lhs: AudioFile, rhs: AudioFile) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }

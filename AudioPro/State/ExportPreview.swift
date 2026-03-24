@@ -131,6 +131,7 @@ struct ExportPreview: Equatable, Sendable {
         return validation.message
     }
 
+    @MainActor
     static func make(files: [AudioFile], compression: CompressionSettings) -> ExportPreview {
         let pendingMetadataCount = files.filter { $0.metadataState.isLoading }.count
         let failedMetadataCount = files.filter { $0.metadataState.failureMessage != nil }.count
