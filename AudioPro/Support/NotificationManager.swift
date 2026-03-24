@@ -2,8 +2,12 @@ import Foundation
 import UserNotifications
 import AppKit
 
+protocol ExportNotifying {
+    func notifyExportFinished(outputURL: URL)
+}
+
 /// Gestisce le notifiche locali e l'apertura del Finder per l'export.
-final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
+final class NotificationManager: NSObject, UNUserNotificationCenterDelegate, ExportNotifying {
     static let shared = NotificationManager()
     private override init() {}
     

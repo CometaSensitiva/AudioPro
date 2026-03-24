@@ -4,6 +4,36 @@ import Combine
 
 @MainActor
 final class AudioAppStateTests: XCTestCase {
+    private actor StubProcessor: ExportProcessing {
+        let result: Result<Void, AudioProcessor.ProcessError>
+        private(set) var processedFileURLs: [URL] = []
+
+        init(result: Result<Void, AudioProcessor.ProcessError>) {
+            self.result = result
+        }
+
+        func cancel() async {}
+
+        func process(
+            fileURLs: [URL],
+            outputURL: URL,
+            job: ExportJob,
+            estimatedTotalDuration: Double?,
+            progressCallback: ExportProgressCallback?
+        ) async -> Result<Void, AudioProcessor.ProcessError> {
+            processedFileURLs = fileURLs
+            return result
+        }
+    }
+
+    private final class SpyNotifier: ExportNotifying {
+        private(set) var notifiedURL: URL?
+
+        func notifyExportFinished(outputURL: URL) {
+            notifiedURL = outputURL
+        }
+    }
+
     private var cancellables: Set<AnyCancellable> = []
 
     func testMoveFilesMovesItemForward() throws {
@@ -165,6 +195,30 @@ final class AudioAppStateTests: XCTestCase {
 
         XCTAssertEqual(state.exportDestinationDefaults.fileName, "Export.m4a")
         XCTAssertEqual(state.exportDestinationDefaults.allowedContentTypes, [.mpeg4Audio])
+    }
+
+    func testStartExportUsesInjectedProcessorAndNotifier() async {
+        let processor = StubProcessor(result: .success(()))
+        let notifier = SpyNotifier()
+        let state = AudioAppState(processor: processor, notifier: notifier)
+        let file = AudioFile(url: URL(fileURLWithPath: "/tmp/voice.m4a"), loadMetadata: false)
+        file.metadataState = .ready
+        state.addFiles([file])
+
+        let outputURL = URL(fileURLWithPath: "/tmp/export.m4a")
+        state.startExport(to: outputURL)
+
+        for _ in 0..<20 {
+            if state.processingState == .completed {
+                break
+            }
+            await Task.yield()
+        }
+
+        let processedFileURLs = await processor.processedFileURLs
+        XCTAssertEqual(processedFileURLs, [file.url])
+        XCTAssertEqual(notifier.notifiedURL, outputURL)
+        XCTAssertEqual(state.processingState, .completed)
     }
     
     // MARK: - Helpers

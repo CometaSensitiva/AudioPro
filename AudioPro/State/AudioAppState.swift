@@ -7,8 +7,6 @@ import UniformTypeIdentifiers
 /// Stato condiviso dell'app: file caricati, selezione, ricerca, impostazioni di compressione e stato di processing.
 @MainActor
 final class AudioAppState: ObservableObject {
-    private static let sharedProcessor = AudioProcessor()
-
     struct ExportDestinationDefaults: Equatable {
         let fileName: String
         let allowedContentTypes: [UTType]
@@ -27,8 +25,21 @@ final class AudioAppState: ObservableObject {
             }
         }
     }
-    private let processor = sharedProcessor
+    private let processor: any ExportProcessing
+    private let notifier: any ExportNotifying
     private var fileChangeCancellables: [ObjectIdentifier: AnyCancellable] = [:]
+
+    init(
+        processor: any ExportProcessing,
+        notifier: any ExportNotifying
+    ) {
+        self.processor = processor
+        self.notifier = notifier
+    }
+
+    convenience init() {
+        self.init(processor: AudioProcessor(), notifier: NotificationManager.shared)
+    }
 
     deinit {
         fileChangeCancellables.removeAll()
@@ -179,7 +190,7 @@ final class AudioAppState: ObservableObject {
             switch result {
             case .success:
                 processingState = .completed
-                NotificationManager.shared.notifyExportFinished(outputURL: outputURL)
+                notifier.notifyExportFinished(outputURL: outputURL)
             case .failure(let error):
                 if case .cancelled = error {
                     return
