@@ -1,8 +1,34 @@
 # AudioPro
 
-AudioPro is a macOS app for importing audio or video files, previewing export settings, and producing either optimized audio output or a compressed video export preset for lecture recordings.
+[![CI](https://github.com/CometaSensitiva/AudioPro/actions/workflows/ci.yml/badge.svg)](https://github.com/CometaSensitiva/AudioPro/actions/workflows/ci.yml)
+![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-0A84FF)
+[![License](https://img.shields.io/badge/license-MIT-2EA043)](LICENSE)
 
-AudioPro keeps its current Tahoe-style visual language through a compatibility design layer, while targeting `macOS 14+`.
+AudioPro is a Tahoe-style macOS app for importing audio or video files, previewing export settings, and producing either optimized audio output or a compressed video export preset for lecture recordings.
+
+The app keeps its current visual language through a compatibility design layer while targeting `macOS 14+`.
+
+## Highlights
+
+- Import audio and video files through the native macOS workflow.
+- Export audio-only output from audio or video sources.
+- Merge multiple audio files into a single export.
+- Use a dedicated compressed video preset for single lecture recordings.
+- Bundle `ffmpeg` helpers with build-time hash verification and runtime signature checks.
+
+## Screenshots
+
+### Empty state
+
+![AudioPro empty state](docs/screenshots/empty-state.png)
+
+### Multi-file audio export
+
+![AudioPro audio export preview](docs/screenshots/audio-merge-preview.png)
+
+### Video compressed mode
+
+![AudioPro compressed video mode](docs/screenshots/video-compressed-mode.png)
 
 ## Download and install
 
@@ -13,7 +39,7 @@ GitHub Releases are the supported distribution channel for end users.
 3. On first launch, use `right click > Open` on the app.
 4. If macOS still blocks the app, open `System Settings > Privacy & Security` and allow it manually.
 
-The app is currently distributed without notarization, so the first launch requires the standard Gatekeeper override flow for non-notarized apps.
+The app is currently distributed without notarization, so first launch requires the standard Gatekeeper override flow for non-notarized apps.
 
 ## Architecture
 
@@ -32,12 +58,12 @@ flowchart LR
     Runner --> Helper["Bundled ffmpeg helper"]
 ```
 
-## Project Structure
+## Project structure
 
 - `AudioPro/`: app source files
 - `AudioProTests/`: test target
 - `AudioPro.xcodeproj/`: Xcode project
-- `docs/`: technical documentation and architecture diagrams
+- `docs/`: technical documentation and screenshots
 - `scripts/`: local release utilities
 
 ## Development
@@ -60,6 +86,10 @@ The script builds the `Release` configuration, verifies the packaged `ffmpeg` he
 
 CI is used only for validation and does not publish end-user artifacts.
 
+## Changelog
+
+Project history is tracked in [CHANGELOG.md](CHANGELOG.md).
+
 ## Bundled FFmpeg
 
 The app ships with two vendored `ffmpeg` helpers inside `AudioPro/`:
@@ -74,3 +104,9 @@ Expected source SHA-256:
 
 - `ffmpeg-binary-arm64`: `3b586ff896c0339e8fd574c143aaccac23c80789341e22d4202f8013a133d3a4`
 - `ffmpeg-binary-x86_64`: `26b3ff92f64950f16be16eed88fe29064c2df516efdfac66cb8fa9abed030bdf`
+
+## License
+
+AudioPro source code in this repository is licensed under the [MIT License](LICENSE).
+
+Bundled third-party tools such as `ffmpeg` remain subject to their own licenses.
