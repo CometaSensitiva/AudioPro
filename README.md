@@ -14,9 +14,15 @@ Open `AudioPro.xcodeproj` in Xcode and run the `AudioPro` scheme.
 
 ## Bundled FFmpeg
 
-The app currently ships with a vendored `ffmpeg-binary` executable inside `AudioPro/`.
-At runtime the app verifies its SHA-256 before launching it.
+The app ships with two vendored `ffmpeg` helpers inside `AudioPro/`:
 
-Expected SHA-256:
+- `ffmpeg-binary-arm64`
+- `ffmpeg-binary-x86_64`
 
-`26b3ff92f64950f16be16eed88fe29064c2df516efdfac66cb8fa9abed030bdf`
+The Xcode build phase verifies the SHA-256 of both source binaries before copying them into `AudioPro.app/Contents/Helpers/`.
+At runtime the app launches the packaged helper only if it is executable and its code signature is valid.
+
+Expected source SHA-256:
+
+- `ffmpeg-binary-arm64`: `3b586ff896c0339e8fd574c143aaccac23c80789341e22d4202f8013a133d3a4`
+- `ffmpeg-binary-x86_64`: `26b3ff92f64950f16be16eed88fe29064c2df516efdfac66cb8fa9abed030bdf`
