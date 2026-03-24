@@ -50,7 +50,7 @@ struct DetailView: View {
             }
         }
         .navigationTitle("")
-        .toolbar(removing: .title)
+        .detailWindowChrome()
         .inspector(isPresented: $appState.isInspectorPresented) {
             CompressionInspectorView()
                 .inspectorColumnWidth(min: 320, ideal: 360, max: 420)
@@ -152,6 +152,17 @@ struct DetailView: View {
     private func openVoiceMemosLibrary() {
         let url = URL(fileURLWithPath: "/System/Applications/VoiceMemos.app")
         NSWorkspace.shared.openApplication(at: url, configuration: .init(), completionHandler: nil)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func detailWindowChrome() -> some View {
+        if #available(macOS 15.0, *) {
+            self.toolbar(removing: .title)
+        } else {
+            self
+        }
     }
 }
 

@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - refactor-quality-hardening
+  pull_request:
+
+jobs:
+  macos-build-and-test:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Run test suite
+        run: |
+          xcodebuild test \
+            -scheme AudioPro \
+            -project AudioPro.xcodeproj \
+            -destination 'platform=macOS' \
+            -derivedDataPath .derivedData/ci-test \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Verify Release build
+        run: |
+          xcodebuild build \
+            -scheme AudioPro \
+            -project AudioPro.xcodeproj \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath .derivedData/ci-release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO

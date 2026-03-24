@@ -10,6 +10,8 @@ xcuserdata/
 build/
 DerivedData/
 .derivedData/
+.derivedData-release-ci/
+dist/
 *.xcarchive
 *.xcresult
 *.dSYM

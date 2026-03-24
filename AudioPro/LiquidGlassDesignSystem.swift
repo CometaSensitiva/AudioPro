@@ -2,7 +2,8 @@ import SwiftUI
 
 // ============================================================================
 // FILE: LiquidGlassDesignSystem.swift
-// Design System Layer per l'adozione di Liquid Glass (macOS 26+)
+// Compatibility design layer for a Tahoe-style look on macOS 14+.
+// Native macOS 26 effects can be added here later behind availability checks.
 // ============================================================================
 
 /// Namespace per le costanti di design
@@ -51,7 +52,7 @@ extension View {
         self.glassEffect(Glass.interactive, in: shape.shape)
     }
     
-    /// Estende l'effetto di sfondo dietro la sidebar (Mock)
+    /// Compatibility implementation for background extension behind the sidebar.
     func glassBackgroundExtension() -> some View {
         self // In macOS 26 questo estenderebbe il materiale nella window chrome
             .background(Material.ultraThinMaterial)
@@ -167,7 +168,7 @@ extension View {
     }
 }
 
-// MARK: - Mocks for Future APIs (macOS 26)
+// MARK: - Compatibility scaffolding for future macOS 26 APIs
 
 /// Contenitore che coordina gli effetti Liquid Glass
 struct GlassEffectContainer<Content: View>: View {
