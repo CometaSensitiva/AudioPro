@@ -4,9 +4,12 @@
 ![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-0A84FF)
 [![License](https://img.shields.io/badge/license-MIT-2EA043)](LICENSE)
 
-AudioPro is a Tahoe-style macOS app for importing audio or video files, previewing export settings, and producing either optimized audio output or a compressed video export preset for lecture recordings.
+This repository contains two focused Tahoe-style macOS apps:
 
-The app keeps its current visual language through a compatibility design layer while targeting `macOS 14+`.
+- **AudioPro** imports audio or video files and produces optimized audio output or a compressed video export preset.
+- **TranscriptPlayer** plays audio or video alongside a manually selected SRT transcript with synchronized highlighting and click-to-seek navigation.
+
+Both apps share a small compatibility design layer while targeting `macOS 14+`.
 
 ## Highlights
 
@@ -15,6 +18,8 @@ The app keeps its current visual language through a compatibility design layer w
 - Merge multiple audio files into a single export.
 - Use a dedicated compressed video preset for single lecture recordings.
 - Bundle `ffmpeg` helpers with build-time hash verification and runtime signature checks.
+- Load SRT transcripts independently from media files in TranscriptPlayer.
+- Follow the active subtitle cue with automatic scrolling and click any cue to seek.
 
 ## Screenshots
 
@@ -46,29 +51,31 @@ The app is currently distributed without notarization, so first launch requires 
 The technical architecture is documented in [docs/architecture.md](docs/architecture.md).
 
 ```mermaid
-flowchart LR
-    UI["SwiftUI Views"] --> AppState["AudioAppState"]
-    AppState --> Preview["ExportPreview"]
-    Preview --> Job["ExportJob"]
-    AppState --> Processor["AudioProcessor"]
-    AppState --> Notify["NotificationManager"]
-    Processor --> Builder["FFmpegCommandBuilder"]
-    Processor --> Verifier["FFmpegBinaryVerifier"]
-    Processor --> Runner["FFmpegProcessRunner"]
-    Runner --> Helper["Bundled ffmpeg helper"]
+flowchart TD
+    Design["LiquidGlassDesignSystem.swift"] --> AudioProTarget["AudioPro target"]
+    Design --> TranscriptTarget["TranscriptPlayer target"]
+    AudioProTarget --> FFmpeg["Bundled ffmpeg helpers"]
+    TranscriptTarget --> AVPlayer["AVPlayer"]
+    TranscriptTarget --> SRT["SRTParser"]
 ```
 
 ## Project structure
 
 - `AudioPro/`: app source files
 - `AudioProTests/`: test target
+- `TranscriptPlayer/`: transcript player app source files
+- `TranscriptPlayerTests/`: SRT parser logic tests
 - `AudioPro.xcodeproj/`: Xcode project
 - `docs/`: technical documentation and screenshots
+- `experiments/`: retained prototypes and visual experiments
 - `scripts/`: local release utilities
 
 ## Development
 
-Open `AudioPro.xcodeproj` in Xcode and run the `AudioPro` scheme.
+Open `AudioPro.xcodeproj` in Xcode and choose one of the shared schemes:
+
+- `AudioPro`
+- `TranscriptPlayer`
 
 Minimum supported OS: `macOS 14.0`.
 
@@ -84,7 +91,9 @@ To produce a release archive locally:
 
 The script builds the `Release` configuration, verifies the packaged `ffmpeg` helpers, creates a versioned ZIP archive, and writes `SHA256SUMS.txt`.
 
-CI is used only for validation and does not publish end-user artifacts.
+CI builds and tests both applications but does not publish end-user artifacts.
+
+TranscriptPlayer is currently a source and CI deliverable only; `scripts/build-release.sh` continues to package AudioPro exclusively.
 
 ## Changelog
 

@@ -18,7 +18,7 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
-      - name: Run test suite
+      - name: Run AudioPro test suite
         run: |
           xcodebuild test \
             -scheme AudioPro \
@@ -28,7 +28,17 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
 
-      - name: Verify Release build
+      - name: Run TranscriptPlayer test suite
+        run: |
+          xcodebuild test \
+            -scheme TranscriptPlayer \
+            -project AudioPro.xcodeproj \
+            -destination 'platform=macOS' \
+            -derivedDataPath .derivedData/ci-transcript-test \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Verify AudioPro Release build
         run: |
           xcodebuild build \
             -scheme AudioPro \
@@ -36,5 +46,16 @@ jobs:
             -configuration Release \
             -destination 'platform=macOS' \
             -derivedDataPath .derivedData/ci-release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Verify TranscriptPlayer Release build
+        run: |
+          xcodebuild build \
+            -scheme TranscriptPlayer \
+            -project AudioPro.xcodeproj \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath .derivedData/ci-transcript-release \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO

@@ -1,4 +1,17 @@
-# AudioPro Architecture
+# AudioPro Workspace Architecture
+
+The Xcode project contains two independent macOS applications. They share only the compatibility design system; TranscriptPlayer does not depend on AudioPro processing code or its bundled ffmpeg helpers.
+
+```mermaid
+flowchart TD
+    Design["LiquidGlassDesignSystem.swift"] --> AudioPro["AudioPro target"]
+    Design --> TranscriptPlayer["TranscriptPlayer target"]
+    AudioPro --> AudioTests["AudioProTests"]
+    TranscriptSources["SRTParser + SubtitleCue"] --> TranscriptPlayer
+    TranscriptSources --> TranscriptTests["TranscriptPlayerTests"]
+```
+
+## AudioPro
 
 AudioPro is a sandboxed macOS app built around a small set of focused layers:
 
@@ -220,3 +233,28 @@ flowchart LR
 - Releases are built locally on macOS, then uploaded manually to GitHub Releases.
 - CI validates build and tests only; it does not publish end-user artifacts.
 - Without Apple Developer notarization, end users must use the standard Gatekeeper override flow on first launch.
+
+## TranscriptPlayer
+
+TranscriptPlayer is a separate sandboxed macOS app that uses AVFoundation and AVKit directly. It has no target dependency on AudioPro and does not execute ffmpeg.
+
+```mermaid
+flowchart LR
+    MediaPicker["Media fileImporter"] --> Scope["Long-lived security scope"]
+    Scope --> Controller["PlayerController"]
+    Controller --> AVPlayer["AVPlayer"]
+    SRTPicker["SRT fileImporter"] --> Parser["SRTParser"]
+    Parser --> Cues["SubtitleCue array"]
+    AVPlayer --> Time["Current time every 0.25 s"]
+    Time --> Active["Active cue"]
+    Cues --> Active
+    Active --> List["TranscriptListView highlight + auto-scroll"]
+    List --> Controller
+```
+
+- `PlayerController` owns playback state, the periodic time observer, media metadata, playback-end observation, and the active media security scope.
+- SRT access is short-lived: the app opens the selected URL, reads it, and immediately releases the security scope.
+- Media access remains active until another media file is selected or the controller is destroyed.
+- `SRTParser` accepts UTF-8 and ISO Latin-1, normalizes line endings, preserves multiline cue text, rejects invalid cues, and sorts valid cues by start time.
+- `TranscriptPlayerTests` is a logic test target that compiles the parser and cue model directly, avoiding an application-host dependency.
+- The shared `TranscriptPlayer` scheme builds the app and runs parser tests. CI also verifies a Release build.

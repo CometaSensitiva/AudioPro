@@ -9,8 +9,7 @@ xcuserdata/
 # Build products
 build/
 DerivedData/
-.derivedData/
-.derivedData-release-ci/
+.derivedData*/
 dist/
 *.xcarchive
 *.xcresult

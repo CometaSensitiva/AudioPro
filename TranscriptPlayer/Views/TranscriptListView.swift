@@ -1,0 +1,72 @@
+import SwiftUI
+
+struct TranscriptListView: View {
+    let cues: [SubtitleCue]
+    let activeCueID: SubtitleCue.ID?
+    let canSeek: Bool
+    let onSelect: (SubtitleCue) -> Void
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 6) {
+                    ForEach(cues) { cue in
+                        cueButton(for: cue)
+                            .id(cue.id)
+                    }
+                }
+                .padding(8)
+            }
+            .onChange(of: activeCueID) { _, cueID in
+                guard let cueID else { return }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    proxy.scrollTo(cueID, anchor: .center)
+                }
+            }
+        }
+        .liquidGlassSurface()
+    }
+
+    @ViewBuilder
+    private func cueButton(for cue: SubtitleCue) -> some View {
+        let row = Button {
+            onSelect(cue)
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Text("\(formatTime(cue.start)) → \(formatTime(cue.end))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(width: 100, alignment: .leading)
+
+                Text(cue.text)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .multilineTextAlignment(.leading)
+                    .textSelection(.enabled)
+            }
+            .padding(10)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!canSeek)
+
+        if cue.id == activeCueID {
+            row
+                .foregroundStyle(.primary)
+                .liquidGlassSurface(shape: .fixed(10))
+        } else {
+            row
+        }
+    }
+
+    private func formatTime(_ seconds: TimeInterval) -> String {
+        let value = max(0, Int(seconds.rounded(.down)))
+        let hours = value / 3_600
+        let minutes = (value % 3_600) / 60
+        let remainingSeconds = value % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
+        }
+        return String(format: "%d:%02d", minutes, remainingSeconds)
+    }
+}
