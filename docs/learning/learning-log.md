@@ -17,3 +17,12 @@ Related concepts: [[Git]], [[Branch]], [[SwiftUI]], [[AVPlayer]], [[App Sandbox]
 - A macOS app icon is an `AppIcon.appiconset` (10 PNG sizes + `Contents.json`) plus the `ASSETCATALOG_COMPILER_APPICON_NAME` build setting; an SVG source kept in `assets/` makes regeneration reproducible with ImageMagick.
 
 Related concepts: [[AVPlayer]], [[SwiftUI]], [[Asset catalog]], [[Code review]]
+
+## 2026-06-11 — Native Liquid Glass and HIG patterns
+
+- Local types that shadow SDK symbols (`Glass`, `glassEffect`) compile silently but block native adoption: renaming the fallback (`LegacyGlass`) makes unqualified names resolve to the real SwiftUI API.
+- Native `.glass`/`.glassProminent` are `PrimitiveButtonStyle`, not `ButtonStyle`: an availability branch between the two protocols must live in a `View` extension, not in a `ButtonStyle` static.
+- macOS menu-backed shortcuts (HIG) work via `FocusedValues` + `@FocusedValue` in a `Commands` struct: the window publishes its actions with `.focusedSceneValue`, the menu reads them and disables items when no window is key.
+- `safeAreaInset(edge: .bottom)` is the idiomatic way to build a Music-style floating player bar that content scrolls behind.
+
+Related concepts: [[SwiftUI]], [[Liquid Glass]], [[HIG]], [[FocusedValues]]

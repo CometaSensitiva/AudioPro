@@ -13,17 +13,32 @@ struct TranscriptPlayerView: View {
     @State private var scrubValue: TimeInterval = 0
 
     var body: some View {
-        VStack(spacing: 14) {
-            header
-            importControls
+        content
+            .safeAreaInset(edge: .bottom, spacing: 0) { playerBar }
+            .toolbar { toolbarContent }
+            .navigationTitle("TranscriptPlayer")
+            .navigationSubtitle(playerController.mediaName ?? "Nessun media")
+            .frame(minWidth: 460, minHeight: 540)
+            .background {
+                // Le superfici glass sono Material: senza un fondo colorato rendono
+                // grigio. Stesso backdrop del DetailView di AudioPro.
+                WaveformBackdrop()
+                    .ignoresSafeArea()
+            }
+            .focusedSceneValue(\.transcriptPlayerActions, currentActions)
+            .onReceive(playerController.$currentTime) { time in
+                updateActiveCue(at: time)
+            }
+    }
 
+    private var content: some View {
+        VStack(spacing: LiquidGlassDesign.spacing) {
             if playerController.hasVideo {
                 VideoPlayer(player: playerController.player)
-                    .frame(minHeight: 180, idealHeight: 220, maxHeight: 240)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .frame(minHeight: 180, idealHeight: 220, maxHeight: 260)
+                    .clipShape(RoundedRectangle(cornerRadius: LiquidGlassDesign.cornerRadius, style: .continuous))
             }
 
-            playbackControls
             statusArea
 
             if cues.isEmpty {
@@ -41,114 +56,93 @@ struct TranscriptPlayerView: View {
                 .equatable()
             }
         }
-        .padding(18)
-        .frame(minWidth: 460, minHeight: 540)
-        .background {
-            // Le superfici glass sono Material: senza un fondo colorato rendono
-            // grigio. Stesso backdrop del DetailView di AudioPro.
-            WaveformBackdrop()
-                .ignoresSafeArea()
-        }
-        .onReceive(playerController.$currentTime) { time in
-            updateActiveCue(at: time)
-        }
+        .padding([.horizontal, .top], LiquidGlassDesign.padding)
+        .padding(.bottom, LiquidGlassDesign.spacing)
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("TranscriptPlayer")
-                .font(.title2.bold())
-            Text("Riproduci audio o video seguendo una trascrizione SRT sincronizzata.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var importControls: some View {
-        HStack(spacing: 10) {
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItemGroup(placement: .primaryAction) {
             Button {
-                Task {
-                    guard let url = await fileSelectionService.selectMedia() else { return }
-                    playerController.loadMedia(from: url)
-                }
+                chooseMedia()
             } label: {
-                Label("Scegli media", systemImage: "play.rectangle")
+                Label("Apri media", systemImage: "play.rectangle")
             }
-            .buttonStyle(.liquidGlass)
+            .labelStyle(.iconOnly)
+            .help("Apri un file audio o video (⌘O)")
 
             Button {
-                Task {
-                    guard let url = await fileSelectionService.selectSRT() else { return }
-                    handleSRTImport(url)
-                }
+                chooseSRT()
             } label: {
-                Label("Scegli SRT", systemImage: "captions.bubble")
+                Label("Apri SRT", systemImage: "captions.bubble")
             }
-            .buttonStyle(.liquidGlass)
-
-            Spacer()
-
-            Text("\(cues.count) segmenti")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
+            .labelStyle(.iconOnly)
+            .help("Apri una trascrizione SRT (⇧⌘O)")
         }
     }
 
-    private var playbackControls: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                Button {
-                    playerController.togglePlayback()
-                } label: {
-                    Image(systemName: playerController.isPlaying ? "pause.fill" : "play.fill")
-                        .frame(width: 18)
-                }
-                .buttonStyle(.liquidGlassProminent)
-                .disabled(!playerController.hasMedia)
-
-                Slider(
-                    value: Binding(
-                        get: {
-                            isScrubbing ? scrubValue : playerController.currentTime
-                        },
-                        set: { scrubValue = $0 }
-                    ),
-                    in: 0...max(playerController.duration, 1),
-                    onEditingChanged: { editing in
-                        if editing {
-                            scrubValue = playerController.currentTime
-                            isScrubbing = true
-                        } else {
-                            isScrubbing = false
-                            playerController.seek(to: scrubValue)
-                        }
+    private var playerBar: some View {
+        LiquidGlassContainer {
+            VStack(spacing: 8) {
+                HStack(spacing: LiquidGlassDesign.spacing) {
+                    Button {
+                        playerController.togglePlayback()
+                    } label: {
+                        Image(systemName: playerController.isPlaying ? "pause.fill" : "play.fill")
+                            .frame(width: 18)
                     }
-                )
-                .disabled(!playerController.hasMedia || playerController.duration <= 0)
+                    .liquidGlassButtonStyle(prominent: true)
+                    .disabled(!playerController.hasMedia)
+                    .help(playerController.isPlaying ? "Pausa (Spazio)" : "Riproduci (Spazio)")
+                    .accessibilityLabel(playerController.isPlaying ? "Pausa" : "Riproduci")
 
-                Text(
-                    "\(formatTime(isScrubbing ? scrubValue : playerController.currentTime))"
-                        + " / \(formatTime(playerController.duration))"
-                )
+                    Text(formatTime(displayTime))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+
+                    Slider(
+                        value: Binding(
+                            get: { displayTime },
+                            set: { scrubValue = $0 }
+                        ),
+                        in: 0...max(playerController.duration, 1),
+                        onEditingChanged: { editing in
+                            if editing {
+                                scrubValue = playerController.currentTime
+                                isScrubbing = true
+                            } else {
+                                isScrubbing = false
+                                playerController.seek(to: scrubValue)
+                            }
+                        }
+                    )
+                    .disabled(!playerController.hasMedia || playerController.duration <= 0)
+                    .accessibilityLabel("Posizione di riproduzione")
+                    .accessibilityValue("\(formatTime(displayTime)) di \(formatTime(playerController.duration))")
+
+                    Text(formatTime(playerController.duration))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+
+                HStack {
+                    Text(playerController.mediaName ?? "Nessun media selezionato")
+                    Spacer()
+                    Text(srtFileName.map { "\($0) · \(cues.count) segmenti" } ?? "Nessun SRT selezionato")
+                        .monospacedDigit()
+                }
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .monospacedDigit()
-                .frame(minWidth: 92, alignment: .trailing)
+                .lineLimit(1)
             }
-
-            HStack {
-                Text(playerController.mediaName ?? "Nessun media selezionato")
-                Spacer()
-                Text(srtFileName ?? "Nessun SRT selezionato")
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
+            .padding(.horizontal, LiquidGlassDesign.padding)
+            .padding(.vertical, 10)
+            .liquidGlassControl(shape: .fixed(16))
         }
-        .padding(12)
-        .liquidGlassSurface()
+        .padding(.horizontal, LiquidGlassDesign.padding)
+        .padding(.bottom, LiquidGlassDesign.spacing)
     }
 
     @ViewBuilder
@@ -171,10 +165,39 @@ struct TranscriptPlayerView: View {
         ContentUnavailableView {
             Label("Nessuna trascrizione", systemImage: "captions.bubble")
         } description: {
-            Text("Seleziona manualmente un file .srt per visualizzare i segmenti.")
+            Text("Apri un file .srt dalla toolbar o dal menu File per visualizzare i segmenti.")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .liquidGlassSurface()
+    }
+
+    private var displayTime: TimeInterval {
+        isScrubbing ? scrubValue : playerController.currentTime
+    }
+
+    private var currentActions: TranscriptPlayerActions {
+        TranscriptPlayerActions(
+            isPlaying: playerController.isPlaying,
+            hasMedia: playerController.hasMedia,
+            togglePlayback: { playerController.togglePlayback() },
+            seekBy: { playerController.seekBy($0) },
+            openMedia: { chooseMedia() },
+            openSRT: { chooseSRT() }
+        )
+    }
+
+    private func chooseMedia() {
+        Task {
+            guard let url = await fileSelectionService.selectMedia() else { return }
+            playerController.loadMedia(from: url)
+        }
+    }
+
+    private func chooseSRT() {
+        Task {
+            guard let url = await fileSelectionService.selectSRT() else { return }
+            handleSRTImport(url)
+        }
     }
 
     private func handleSRTImport(_ url: URL) {

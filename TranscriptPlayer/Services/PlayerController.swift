@@ -101,6 +101,11 @@ final class PlayerController: ObservableObject {
         player.pause()
     }
 
+    func seekBy(_ delta: TimeInterval) {
+        guard hasMedia else { return }
+        seek(to: currentTime + delta)
+    }
+
     func seek(to seconds: TimeInterval) {
         guard hasMedia else { return }
         let upperBound = duration > 0 ? duration : seconds

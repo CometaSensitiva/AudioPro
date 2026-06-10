@@ -2,8 +2,9 @@ import SwiftUI
 
 // ============================================================================
 // FILE: LiquidGlassDesignSystem.swift
-// Compatibility design layer for a Tahoe-style look on macOS 14+.
-// Native macOS 26 effects can be added here later behind availability checks.
+// Design layer Liquid Glass condiviso tra AudioPro e TranscriptPlayer.
+// macOS 26+: API native (.glassEffect, .glass/.glassProminent).
+// macOS 14-15: fallback Material visivamente identico al comportamento storico.
 // ============================================================================
 
 /// Namespace per le costanti di design
@@ -23,7 +24,7 @@ enum LiquidGlassShape {
     case capsule
     /// Raggio calcolato concentricamente (raggio genitore - padding)
     case concentric(parentRadius: CGFloat, padding: CGFloat)
-    
+
     var shape: AnyShape {
         switch self {
         case .fixed(let radius):
@@ -42,52 +43,66 @@ enum LiquidGlassShape {
 extension View {
     /// Applica una superficie Liquid Glass standard
     /// - Parameter shape: La forma da applicare (default: fixed 12pt)
+    @ViewBuilder
     func liquidGlassSurface(shape: LiquidGlassShape = .fixed(LiquidGlassDesign.cornerRadius)) -> some View {
-        self.glassEffect(Glass.regular, in: shape.shape)
+        if #available(macOS 26.0, *) {
+            self.glassEffect(.regular, in: shape.shape)
+        } else {
+            self.legacyGlassEffect(.regular, in: shape.shape)
+        }
     }
-    
+
     /// Applica una superficie Liquid Glass interattiva
     /// - Parameter shape: La forma da applicare (default: fixed 12pt)
+    @ViewBuilder
     func liquidGlassControl(shape: LiquidGlassShape = .fixed(LiquidGlassDesign.cornerRadius)) -> some View {
-        self.glassEffect(Glass.interactive, in: shape.shape)
+        if #available(macOS 26.0, *) {
+            self.glassEffect(.regular.interactive(), in: shape.shape)
+        } else {
+            self.legacyGlassEffect(.interactive, in: shape.shape)
+        }
     }
-    
-    /// Compatibility implementation for background extension behind the sidebar.
-    func glassBackgroundExtension() -> some View {
-        self // In macOS 26 questo estenderebbe il materiale nella window chrome
-            .background(Material.ultraThinMaterial)
-    }
-}
 
-/// Spaziatore per Toolbar (Mock)
-struct ToolbarSpacer: ToolbarContent {
-    enum Kind {
-        case flexible
-        case fixed
-    }
-    
-    private let kind: Kind
-    
-    init(_ kind: Kind = .flexible) {
-        self.kind = kind
-    }
-    
-    var body: some ToolbarContent {
-        ToolbarItem(placement: .automatic) {
-            Spacer(minLength: kind == .fixed ? 12 : nil)
+    /// Stile bottone Liquid Glass: nativo su macOS 26, custom sotto.
+    /// I nativi .glass/.glassProminent sono PrimitiveButtonStyle, quindi il
+    /// branch di disponibilità deve vivere in una View extension.
+    @ViewBuilder
+    func liquidGlassButtonStyle(prominent: Bool = false, shape: LiquidGlassShape = .capsule) -> some View {
+        if #available(macOS 26.0, *) {
+            if prominent {
+                self.buttonStyle(.glassProminent)
+            } else {
+                self.buttonStyle(.glass)
+            }
+        } else {
+            self.buttonStyle(LiquidGlassButtonStyle(shape: shape, isProminent: prominent))
         }
     }
 }
 
-// MARK: - Button Styles
+/// Contenitore che coordina effetti glass adiacenti (morphing su macOS 26).
+struct LiquidGlassContainer<Content: View>: View {
+    var spacing: CGFloat? = nil
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: spacing, content: content)
+        } else {
+            content()
+        }
+    }
+}
+
+// MARK: - Button Styles (fallback macOS 14-15)
 
 struct LiquidGlassButtonStyle: ButtonStyle {
     var shape: LiquidGlassShape = .capsule
     var isProminent: Bool = false
-    
+
     // Stato per gestire l'hovering
     @State private var isHovering = false
-    
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .padding(.horizontal, 12)
@@ -97,11 +112,11 @@ struct LiquidGlassButtonStyle: ButtonStyle {
                     if isProminent {
                         // Prominent usa un effetto più forte o tint
                         Color.accentColor.opacity(isHovering ? 0.3 : 0.2)
-                            .glassEffect(Glass.interactive, in: shape.shape)
+                            .legacyGlassEffect(.interactive, in: shape.shape)
                     } else {
                         // Standard glass
                         Color.clear
-                            .glassEffect(Glass.interactive, in: shape.shape)
+                            .legacyGlassEffect(.interactive, in: shape.shape)
                             .background(
                                 isHovering ? Color.white.opacity(0.1) : Color.clear
                             )
@@ -119,45 +134,29 @@ struct LiquidGlassButtonStyle: ButtonStyle {
     }
 }
 
-extension ButtonStyle where Self == LiquidGlassButtonStyle {
-    static var liquidGlass: LiquidGlassButtonStyle { LiquidGlassButtonStyle() }
-    
-    static func liquidGlass(shape: LiquidGlassShape) -> LiquidGlassButtonStyle {
-        LiquidGlassButtonStyle(shape: shape)
-    }
-    
-    static var liquidGlassProminent: LiquidGlassButtonStyle {
-        LiquidGlassButtonStyle(shape: .capsule, isProminent: true)
-    }
-}
+// MARK: - Legacy fallback (macOS 14-15)
 
-// MARK: - Stub Liquid Glass API (compatibility)
-
-/// Minimal placeholder for the future Glass style used by glassEffect.
-struct Glass: Equatable {
+/// Approssimazione Material del glass per macOS < 26. Il rendering è
+/// volutamente identico allo storico: nessuna regressione visiva sotto Tahoe.
+private struct LegacyGlass {
     enum Kind {
         case regular
         case interactive
-        case systemMaterial
     }
     let kind: Kind
-    static let regular = Glass(kind: .regular)
-    static let interactive = Glass(kind: .interactive)
-    static let systemMaterial = Glass(kind: .systemMaterial)
-    
+    static let regular = LegacyGlass(kind: .regular)
+    static let interactive = LegacyGlass(kind: .interactive)
+
     var material: Material {
         switch kind {
         case .interactive: return .ultraThinMaterial
         case .regular: return .regularMaterial
-        case .systemMaterial: return .bar
         }
     }
 }
 
-/// Backport/stub for the `glassEffect(_:in:)` modifier used throughout the design system.
-extension View {
-    func glassEffect(_ glass: Glass, in shape: AnyShape) -> some View {
-        // Simple approximation: material background clipped to shape, with a subtle stroke.
+private extension View {
+    func legacyGlassEffect(_ glass: LegacyGlass, in shape: AnyShape) -> some View {
         self
             .background(glass.material)
             .clipShape(shape)
@@ -165,32 +164,5 @@ extension View {
                 shape.stroke(.white.opacity(glass.kind == .interactive ? 0.25 : 0.15), lineWidth: 1)
             }
             .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-    }
-}
-
-// MARK: - Compatibility scaffolding for future macOS 26 APIs
-
-/// Contenitore che coordina gli effetti Liquid Glass
-struct GlassEffectContainer<Content: View>: View {
-    let content: Content
-    
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-    
-    var body: some View {
-        content
-    }
-}
-
-extension View {
-    /// Identifica una vista per le transizioni Liquid Glass
-    func glassEffectID(_ id: String, in namespace: Namespace.ID) -> some View {
-        self.matchedGeometryEffect(id: id, in: namespace)
-    }
-    
-    /// Stub per glassEffectID se matchedGeometryEffect non è desiderato o per compatibilità
-    func glassEffectID(_ id: String) -> some View {
-        self
     }
 }
