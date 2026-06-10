@@ -1,24 +1,16 @@
 import AVKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct TranscriptPlayerView: View {
     @StateObject private var playerController = PlayerController()
+    @StateObject private var fileSelectionService = FileSelectionService()
     @State private var cues: [SubtitleCue] = []
+    @State private var transcriptRevision = UUID()
+    @State private var activeCueID: SubtitleCue.ID?
     @State private var srtFileName: String?
     @State private var srtErrorMessage: String?
-    @State private var mediaImportErrorMessage: String?
-    @State private var isMediaImporterPresented = false
-    @State private var isSRTImporterPresented = false
     @State private var isScrubbing = false
     @State private var scrubValue: TimeInterval = 0
-
-    private var activeCueID: SubtitleCue.ID? {
-        cues.first {
-            playerController.currentTime >= $0.start
-                && playerController.currentTime <= $0.end
-        }?.id
-    }
 
     var body: some View {
         VStack(spacing: 14) {
@@ -38,6 +30,7 @@ struct TranscriptPlayerView: View {
                 emptyTranscript
             } else {
                 TranscriptListView(
+                    transcriptRevision: transcriptRevision,
                     cues: cues,
                     activeCueID: activeCueID,
                     canSeek: playerController.hasMedia
@@ -45,34 +38,19 @@ struct TranscriptPlayerView: View {
                     playerController.seek(to: cue.start)
                     playerController.play()
                 }
+                .equatable()
             }
         }
         .padding(18)
         .frame(minWidth: 460, minHeight: 540)
         .background {
-            LinearGradient(
-                colors: [
-                    Color.accentColor.opacity(0.08),
-                    Color.clear
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // Le superfici glass sono Material: senza un fondo colorato rendono
+            // grigio. Stesso backdrop del DetailView di AudioPro.
+            WaveformBackdrop()
+                .ignoresSafeArea()
         }
-        .fileImporter(
-            isPresented: $isMediaImporterPresented,
-            allowedContentTypes: [.audiovisualContent],
-            allowsMultipleSelection: false
-        ) { result in
-            handleMediaImport(result)
-        }
-        .fileImporter(
-            isPresented: $isSRTImporterPresented,
-            allowedContentTypes: srtContentTypes,
-            allowsMultipleSelection: false
-        ) { result in
-            handleSRTImport(result)
+        .onReceive(playerController.$currentTime) { time in
+            updateActiveCue(at: time)
         }
     }
 
@@ -90,14 +68,20 @@ struct TranscriptPlayerView: View {
     private var importControls: some View {
         HStack(spacing: 10) {
             Button {
-                isMediaImporterPresented = true
+                Task {
+                    guard let url = await fileSelectionService.selectMedia() else { return }
+                    playerController.loadMedia(from: url)
+                }
             } label: {
                 Label("Scegli media", systemImage: "play.rectangle")
             }
             .buttonStyle(.liquidGlass)
 
             Button {
-                isSRTImporterPresented = true
+                Task {
+                    guard let url = await fileSelectionService.selectSRT() else { return }
+                    handleSRTImport(url)
+                }
             } label: {
                 Label("Scegli SRT", systemImage: "captions.bubble")
             }
@@ -170,7 +154,6 @@ struct TranscriptPlayerView: View {
     @ViewBuilder
     private var statusArea: some View {
         if let message = playerController.errorMessage
-            ?? mediaImportErrorMessage
             ?? srtErrorMessage {
             Label(message, systemImage: "exclamationmark.triangle.fill")
                 .font(.caption)
@@ -194,27 +177,8 @@ struct TranscriptPlayerView: View {
         .liquidGlassSurface()
     }
 
-    private var srtContentTypes: [UTType] {
-        var types: [UTType] = [.plainText]
-        if let srtType = UTType(filenameExtension: "srt"), srtType != .plainText {
-            types.insert(srtType, at: 0)
-        }
-        return types
-    }
-
-    private func handleMediaImport(_ result: Result<[URL], Error>) {
+    private func handleSRTImport(_ url: URL) {
         do {
-            guard let url = try result.get().first else { return }
-            mediaImportErrorMessage = nil
-            playerController.loadMedia(from: url)
-        } catch {
-            mediaImportErrorMessage = "Impossibile selezionare il media: \(error.localizedDescription)"
-        }
-    }
-
-    private func handleSRTImport(_ result: Result<[URL], Error>) {
-        do {
-            guard let url = try result.get().first else { return }
             let hasSecurityScope = url.startAccessingSecurityScopedResource()
             defer {
                 if hasSecurityScope {
@@ -224,15 +188,25 @@ struct TranscriptPlayerView: View {
 
             let parsedCues = try SRTParser.load(from: url)
             cues = parsedCues
+            transcriptRevision = UUID()
             srtFileName = url.lastPathComponent
             srtErrorMessage = parsedCues.isEmpty
                 ? "Il file SRT non contiene segmenti validi."
                 : nil
+            updateActiveCue(at: playerController.currentTime)
         } catch {
             cues = []
+            transcriptRevision = UUID()
+            activeCueID = nil
             srtFileName = nil
             srtErrorMessage = "Impossibile leggere il file SRT: \(error.localizedDescription)"
         }
+    }
+
+    private func updateActiveCue(at time: TimeInterval) {
+        let nextCueID = SubtitleCueLookup.activeCueID(in: cues, at: time)
+        guard nextCueID != activeCueID else { return }
+        activeCueID = nextCueID
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {

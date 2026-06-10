@@ -1,10 +1,17 @@
 import SwiftUI
 
-struct TranscriptListView: View {
+struct TranscriptListView: View, Equatable {
+    let transcriptRevision: UUID
     let cues: [SubtitleCue]
     let activeCueID: SubtitleCue.ID?
     let canSeek: Bool
     let onSelect: (SubtitleCue) -> Void
+
+    static func == (lhs: TranscriptListView, rhs: TranscriptListView) -> Bool {
+        lhs.transcriptRevision == rhs.transcriptRevision
+            && lhs.activeCueID == rhs.activeCueID
+            && lhs.canSeek == rhs.canSeek
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -29,13 +36,14 @@ struct TranscriptListView: View {
 
     @ViewBuilder
     private func cueButton(for cue: SubtitleCue) -> some View {
+        let isActive = cue.id == activeCueID
         let row = Button {
             onSelect(cue)
         } label: {
             HStack(alignment: .top, spacing: 12) {
                 Text("\(formatTime(cue.start)) → \(formatTime(cue.end))")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(isActive ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
                     .monospacedDigit()
                     .frame(width: 100, alignment: .leading)
 
@@ -50,10 +58,19 @@ struct TranscriptListView: View {
         .buttonStyle(.plain)
         .disabled(!canSeek)
 
-        if cue.id == activeCueID {
+        if isActive {
             row
                 .foregroundStyle(.primary)
-                .liquidGlassSurface(shape: .fixed(10))
+                .background {
+                    Color.accentColor.opacity(0.18)
+                        .glassEffect(Glass.regular, in: LiquidGlassShape.fixed(10).shape)
+                }
+                .overlay(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(Color.accentColor)
+                        .frame(width: 3)
+                        .padding(.vertical, 6)
+                }
         } else {
             row
         }
