@@ -42,3 +42,24 @@ One more explicitly linked shared source in the project file.
 
 **Status**
 Accepted
+
+## 2026-06-11 — Native Liquid Glass adoption and HIG layout for TranscriptPlayer
+
+**Context**
+The shared design layer was a Material stub whose names shadowed the real macOS 26 APIs, and TranscriptPlayer kept all chrome inside the content view.
+
+**Options**
+- Qualify SDK symbols explicitly and keep the stubs.
+- Rename live stubs to Legacy*, delete dead ones, branch on availability.
+
+**Decision**
+`liquidGlassSurface`/`liquidGlassControl`/`liquidGlassButtonStyle` now use native glass on macOS 26 and the byte-identical Material fallback below; TranscriptPlayer moved to a native toolbar, window title/subtitle, menu-backed shortcuts (⌘O, ⇧⌘O, Space, arrows) and a bottom player bar.
+
+**Reason**
+Unqualified names must resolve to real SDK symbols going forward; missing references fail loudly at build time. Both apps gain Tahoe styling from one shared file.
+
+**Trade-off**
+Native button metrics differ slightly from the legacy capsule on macOS 26; fallback rendering is unchanged.
+
+**Status**
+Accepted

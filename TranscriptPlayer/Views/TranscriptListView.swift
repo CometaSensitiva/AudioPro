@@ -63,7 +63,7 @@ struct TranscriptListView: View, Equatable {
                 .foregroundStyle(.primary)
                 .background {
                     Color.accentColor.opacity(0.18)
-                        .glassEffect(Glass.regular, in: LiquidGlassShape.fixed(10).shape)
+                        .liquidGlassSurface(shape: .fixed(10))
                 }
                 .overlay(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
