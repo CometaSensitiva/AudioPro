@@ -21,3 +21,24 @@ The project file and CI contain additional targets, and the shared source is lin
 
 **Status**
 Accepted
+
+## 2026-06-11 — TranscriptPlayer visual identity and shared backdrop
+
+**Context**
+The first TranscriptPlayer build looked gray and shipped without an app icon.
+
+**Options**
+- Restyle with a new backdrop duplicated in the target.
+- Share AudioPro's `WaveformBackdrop` and reuse the established look.
+
+**Decision**
+Share `WaveformHero.swift` with the TranscriptPlayer target (same mechanism as the design system) and add a dedicated "caption bubble" icon generated from `assets/transcript-player-icon.svg`.
+
+**Reason**
+Glass surfaces are Materials and only come alive over a colored backdrop; sharing the existing one guarantees visual coherence with zero duplication.
+
+**Trade-off**
+One more explicitly linked shared source in the project file.
+
+**Status**
+Accepted
