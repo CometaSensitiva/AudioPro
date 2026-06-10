@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SRT Audio Transcript Viewer</title>
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #1f2933;
+      background: #f5f7fa;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+    }
+    .app {
+      max-width: 980px;
+      margin: 0 auto;
+      background: white;
+      border: 1px solid #d9e2ec;
+      border-radius: 14px;
+      padding: 20px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+    }
+    h1 {
+      font-size: 22px;
+      margin: 0 0 8px;
+    }
+    .hint {
+      margin: 0 0 18px;
+      color: #52606d;
+      font-size: 14px;
+    }
+    .controls {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 1fr 1fr;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 760px) {
+      .controls { grid-template-columns: 1fr; }
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    input[type=file] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 10px;
+      border: 1px solid #bcccdc;
+      border-radius: 10px;
+      background: #f8fafc;
+    }
+    audio, video {
+      width: 100%;
+      margin: 8px 0 14px;
+    }
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin: 10px 0 14px;
+      color: #52606d;
+      font-size: 14px;
+    }
+    .toolbar input {
+      width: 84px;
+      padding: 6px 8px;
+      border: 1px solid #bcccdc;
+      border-radius: 8px;
+    }
+    .transcript {
+      height: 62vh;
+      overflow: auto;
+      border: 1px solid #d9e2ec;
+      border-radius: 12px;
+      background: #fbfdff;
+    }
+    .cue {
+      display: grid;
+      grid-template-columns: 112px 1fr;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid #edf2f7;
+      cursor: pointer;
+      line-height: 1.45;
+    }
+    .cue:hover {
+      background: #f0f4f8;
+    }
+    .cue.active {
+      background: #e6f6ff;
+      outline: 2px solid #9bd7f7;
+      outline-offset: -2px;
+    }
+    .time {
+      font-variant-numeric: tabular-nums;
+      color: #52606d;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .text {
+      white-space: pre-wrap;
+    }
+    .status {
+      min-height: 20px;
+      color: #52606d;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .error {
+      color: #b42318;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>SRT Audio Transcript Viewer</h1>
+    <p class="hint">Carica un file audio/video e un file .srt. Il testo viene evidenziato durante la riproduzione; clicca una riga per saltare a quel punto.</p>
+
+    <section class="controls">
+      <div>
+        <label for="mediaFile">Audio o video</label>
+        <input id="mediaFile" type="file" accept="audio/*,video/*">
+      </div>
+      <div>
+        <label for="srtFile">Sottotitoli .srt</label>
+        <input id="srtFile" type="file" accept=".srt,text/plain">
+      </div>
+    </section>
+
+    <div id="mediaContainer"></div>
+
+    <section class="toolbar">
+      <span id="count">0 segmenti</span>
+      <label style="margin:0;">Offset secondi:
+        <input id="offset" type="number" value="0" step="0.1">
+      </label>
+      <span>Usa offset se i sottotitoli sono anticipati/posticipati.</span>
+    </section>
+
+    <section id="transcript" class="transcript" aria-label="Trascrizione"></section>
+    <div id="status" class="status"></div>
+  </main>
+
+  <script>
+    const mediaFile = document.getElementById("mediaFile");
+    const srtFile = document.getElementById("srtFile");
+    const mediaContainer = document.getElementById("mediaContainer");
+    const transcript = document.getElementById("transcript");
+    const statusEl = document.getElementById("status");
+    const countEl = document.getElementById("count");
+    const offsetInput = document.getElementById("offset");
+
+    let media = null;
+    let cues = [];
+    let activeIndex = -1;
+
+    function setStatus(message, isError=false) {
+      statusEl.textContent = message;
+      statusEl.className = "status" + (isError ? " error" : "");
+    }
+
+    function parseTime(t) {
+      // SRT: 00:01:02,345 oppure 01:02,345
+      const normalized = t.trim().replace(",", ".");
+      const parts = normalized.split(":").map(Number);
+      let seconds = 0;
+      if (parts.length === 3) {
+        seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+      } else if (parts.length === 2) {
+        seconds = parts[0] * 60 + parts[1];
+      } else {
+        seconds = Number(parts[0]);
+      }
+      return seconds;
+    }
+
+    function fmt(seconds) {
+      seconds = Math.max(0, seconds);
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = Math.floor(seconds % 60);
+      const pad = n => String(n).padStart(2, "0");
+      return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+    }
+
+    function parseSRT(text) {
+      text = text.replace(/\r/g, "").trim();
+      if (!text) return [];
+
+      return text.split(/\n\s*\n/).map(block => {
+        const lines = block.split("\n").filter(Boolean);
+        const timeLineIndex = lines.findIndex(line => line.includes("-->"));
+        if (timeLineIndex === -1) return null;
+
+        const [startRaw, endRaw] = lines[timeLineIndex].split("-->").map(x => x.trim().split(/\s+/)[0]);
+        const body = lines.slice(timeLineIndex + 1).join("\n").trim();
+
+        return {
+          start: parseTime(startRaw),
+          end: parseTime(endRaw),
+          text: body
+        };
+      }).filter(cue => cue && cue.text).sort((a, b) => a.start - b.start);
+    }
+
+    function renderTranscript() {
+      transcript.innerHTML = "";
+      countEl.textContent = `${cues.length} segmenti`;
+
+      const frag = document.createDocumentFragment();
+      cues.forEach((cue, index) => {
+        const row = document.createElement("div");
+        row.className = "cue";
+        row.dataset.index = index;
+
+        const time = document.createElement("div");
+        time.className = "time";
+        time.textContent = `${fmt(cue.start)} → ${fmt(cue.end)}`;
+
+        const text = document.createElement("div");
+        text.className = "text";
+        text.textContent = cue.text;
+
+        row.append(time, text);
+        row.addEventListener("click", () => {
+          if (!media) return;
+          const offset = Number(offsetInput.value || 0);
+          media.currentTime = Math.max(0, cue.start + offset);
+          media.play();
+        });
+
+        frag.appendChild(row);
+      });
+
+      transcript.appendChild(frag);
+    }
+
+    function updateActiveCue() {
+      if (!media || cues.length === 0) return;
+
+      const offset = Number(offsetInput.value || 0);
+      const t = media.currentTime - offset;
+      const index = cues.findIndex(cue => t >= cue.start && t <= cue.end);
+
+      if (index === activeIndex) return;
+
+      const old = transcript.querySelector(".cue.active");
+      if (old) old.classList.remove("active");
+
+      activeIndex = index;
+
+      if (index >= 0) {
+        const el = transcript.querySelector(`.cue[data-index="${index}"]`);
+        if (el) {
+          el.classList.add("active");
+          el.scrollIntoView({ block: "center", behavior: "smooth" });
+        }
+      }
+    }
+
+    mediaFile.addEventListener("change", () => {
+      const file = mediaFile.files[0];
+      if (!file) return;
+
+      const url = URL.createObjectURL(file);
+      const tag = file.type.startsWith("video/") ? "video" : "audio";
+
+      mediaContainer.innerHTML = "";
+      media = document.createElement(tag);
+      media.controls = true;
+      media.preload = "metadata";
+      media.src = url;
+      mediaContainer.appendChild(media);
+
+      media.addEventListener("timeupdate", updateActiveCue);
+      media.addEventListener("seeked", updateActiveCue);
+
+      setStatus(`Media caricato: ${file.name}`);
+    });
+
+    srtFile.addEventListener("change", async () => {
+      const file = srtFile.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        cues = parseSRT(text);
+        activeIndex = -1;
+        renderTranscript();
+        setStatus(cues.length ? `SRT caricato: ${file.name}` : "Nessun segmento valido trovato nel file SRT.", !cues.length);
+      } catch (err) {
+        setStatus("Errore nella lettura del file SRT: " + err.message, true);
+      }
+    });
+  </script>
+</body>
+</html>
