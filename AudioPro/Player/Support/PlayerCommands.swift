@@ -30,10 +30,11 @@ struct PlayerCommands: Commands {
                 .disabled(actions == nil)
         }
         CommandMenu("Riproduzione") {
+            // Lo Spazio è registrato sul bottone play/pausa della barra di
+            // trasporto, non qui: registrarlo due volte creerebbe ambiguità.
             Button(actions?.isPlaying == true ? "Pausa" : "Riproduci") {
                 actions?.togglePlayback()
             }
-            .keyboardShortcut(.space, modifiers: [])
             .disabled(actions?.hasMedia != true)
 
             Divider()
