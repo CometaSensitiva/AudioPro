@@ -46,5 +46,6 @@ Related concepts: [[Liquid Glass]], [[SwiftUI]], [[TimelineView]], [[MeshGradien
 - ⌘F come key equivalent *con modificatore* raggiunge il menu indipendentemente dal focus — i tasti nudi (Spazio, frecce) no: vengono consumati dal first responder.
 - Una stima di output è derivabile in forma chiusa solo se il preset è fisso: `MB ≈ bitrate_kbps × durata / 8000` (video HEVC 1500 kbps, audio copy trascurabile).
 - Le build CLI (`xcodebuild` da terminale) su questa macchina aggiungono `com.apple.provenance` a ogni file e il codesign fallisce con "detritus not allowed"; le build dalla GUI di Xcode non hanno il problema.
+- Con `PBXFileSystemSynchronizedRootGroup`, switch di branch e `git mv` eseguiti mentre Xcode è aperto possono generare copie con suffisso ` 2` che entrano subito in compilazione: chiudere il progetto durante operazioni Git pesanti e ricontrollare `git status` dopo.
 
 Related concepts: [[Liquid Glass]], [[AVPlayer]], [[SwiftUI]], [[Key equivalents]], [[Codesigning]]
