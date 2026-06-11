@@ -38,18 +38,15 @@ struct AudioFileRowView: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
+            // Riga di lista standard: niente glass in sidebar, solo fill
+            // di selezione sul backdrop ambient.
             let shape = RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
-            Color.clear
-                .liquidGlassSurface(cornerRadius: cardRadius)
+            shape
+                .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.04))
                 .overlay {
-                    shape
-                        .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.white.opacity(0.05))
-                }
-                .overlay {
-                    shape.stroke(
-                        isSelected ? Color.accentColor.opacity(0.45) : Color.white.opacity(0.1),
-                        lineWidth: isSelected ? 1.2 : 1
-                    )
+                    if isSelected {
+                        shape.stroke(Color.accentColor.opacity(0.45), lineWidth: 1.2)
+                    }
                 }
         }
         .contentShape(Rectangle())

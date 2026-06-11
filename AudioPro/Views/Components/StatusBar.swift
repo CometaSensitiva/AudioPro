@@ -8,8 +8,8 @@ struct StatusBar: View {
         HStack(spacing: 12) {
             switch state {
             case .idle:
-                Text("Pronto")
-                    .foregroundStyle(.secondary)
+                // Mai visibile: il call site mostra la barra solo fuori da idle.
+                EmptyView()
             case .running(let progress):
                 ProgressView(value: progress)
                     .progressViewStyle(.linear)
