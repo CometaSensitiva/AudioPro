@@ -18,7 +18,10 @@ struct ContentView: View {
                 PlayerView(model: playerModel)
             }
         }
-        .searchable(text: $appState.searchText, prompt: "Cerca nella coda file")
+        // Placement .sidebar: la ricerca filtra la Coda file, che vive in
+        // sidebar (caso documentato di SearchFieldPlacement.sidebar); così
+        // l'inspector toggle resta l'unico elemento trailing della toolbar.
+        .searchable(text: $appState.searchText, placement: .sidebar, prompt: "Cerca nella coda file")
         .environmentObject(appState)
     }
 }

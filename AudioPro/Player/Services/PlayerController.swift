@@ -8,6 +8,9 @@ final class PlayerController: ObservableObject {
     @Published private(set) var duration: TimeInterval = 0
     @Published private(set) var isPlaying = false
     @Published private(set) var hasVideo = false
+    /// Larghezza/altezza della traccia video (trasformata), per dimensionare
+    /// il VideoPlayer sul formato reale invece che su un'altezza fissa.
+    @Published private(set) var videoAspectRatio: CGFloat?
     @Published private(set) var hasMedia = false
     @Published private(set) var mediaName: String?
     @Published private(set) var errorMessage: String?
@@ -72,11 +75,27 @@ final class PlayerController: ObservableObject {
                     throw PlayerError.mediaNotPlayable
                 }
 
+                var aspectRatio: CGFloat?
+                if let track = tracks.first {
+                    async let naturalSize = track.load(.naturalSize)
+                    async let transform = track.load(.preferredTransform)
+                    // Il transform gestisce i video registrati ruotati, dove
+                    // naturalSize è invertita rispetto alla resa a schermo.
+                    let rect = CGRect(origin: .zero, size: try await naturalSize)
+                        .applying(try await transform)
+                    if abs(rect.height) > 0 {
+                        aspectRatio = abs(rect.width) / abs(rect.height)
+                    }
+                }
+                try Task.checkCancellation()
+                guard self.loadIdentifier == identifier else { return }
+
                 let item = AVPlayerItem(asset: asset)
                 self.player.replaceCurrentItem(with: item)
                 self.installPlaybackEndObserver(for: item)
                 self.duration = assetDuration.seconds.isFinite ? max(0, assetDuration.seconds) : 0
                 self.hasVideo = !tracks.isEmpty
+                self.videoAspectRatio = aspectRatio
                 self.hasMedia = true
             } catch is CancellationError {
                 return
@@ -87,6 +106,11 @@ final class PlayerController: ObservableObject {
                 self.mediaName = nil
             }
         }
+    }
+
+    func unloadMedia() {
+        resetMedia()
+        errorMessage = nil
     }
 
     func togglePlayback() {
@@ -197,6 +221,7 @@ final class PlayerController: ObservableObject {
         updateCurrentTime(0)
         duration = 0
         hasVideo = false
+        videoAspectRatio = nil
         hasMedia = false
         mediaName = nil
     }

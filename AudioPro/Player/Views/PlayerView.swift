@@ -40,7 +40,8 @@ struct PlayerView: View {
         VStack(spacing: LiquidGlassDesign.spacing) {
             if playerController.hasVideo {
                 VideoPlayer(player: playerController.player)
-                    .frame(minHeight: 180, idealHeight: 220, maxHeight: 260)
+                    .aspectRatio(playerController.videoAspectRatio ?? 16 / 9, contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: 480)
                     .clipShape(RoundedRectangle(cornerRadius: LiquidGlassDesign.cornerRadius, style: .continuous))
             }
 
@@ -82,6 +83,15 @@ struct PlayerView: View {
             }
             .labelStyle(.iconOnly)
             .help("Apri una trascrizione SRT (⇧⌘O)")
+
+            Button(role: .destructive) {
+                model.clearAll()
+            } label: {
+                Label("Svuota", systemImage: "trash")
+            }
+            .labelStyle(.iconOnly)
+            .help("Svuota media e trascrizione")
+            .disabled(model.isEmpty)
         }
     }
 
