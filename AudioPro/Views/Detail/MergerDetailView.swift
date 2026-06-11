@@ -20,38 +20,28 @@ struct MergerDetailView: View {
                             FileInfoBlock(preview: appState.exportPreview)
                                 .padding()
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .background {
-                                    Color.clear
-                                        .liquidGlassSurface()
-                                }
+                                .background(
+                                    .regularMaterial,
+                                    in: RoundedRectangle(cornerRadius: LiquidGlassDesign.cornerRadius, style: .continuous)
+                                )
                         } else {
                             Text("Seleziona o aggiungi un file per iniziare.")
                                 .font(.headline)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding()
-                                .background {
-                                    Color.clear
-                                        .liquidGlassSurface()
-                                }
+                                .background(
+                                    .regularMaterial,
+                                    in: RoundedRectangle(cornerRadius: LiquidGlassDesign.cornerRadius, style: .continuous)
+                                )
                         }
                     }
                     .padding()
                 }
                 
-                StatusBar(state: appState.processingState) {
-                    appState.cancelExport()
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .background {
-                    Color.clear
-                        .liquidGlassSurface()
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 8)
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) { exportStatusBar }
         .navigationTitle("")
         .detailWindowChrome()
         .inspector(isPresented: $appState.isInspectorPresented) {
@@ -61,8 +51,18 @@ struct MergerDetailView: View {
         .toolbar {
             ToolbarItemGroup(placement: .navigation) {
                 addButton
-                exportButton
                 voiceMemosButton
+            }
+
+            ToolbarSpacer(.fixed, placement: .navigation)
+
+            ToolbarItemGroup(placement: .navigation) {
+                exportButton
+            }
+
+            ToolbarSpacer(.fixed, placement: .navigation)
+
+            ToolbarItemGroup(placement: .navigation) {
                 clearButton
             }
 
@@ -72,6 +72,22 @@ struct MergerDetailView: View {
         }
     }
     
+    /// Unico elemento glass della sezione, speculare alla player bar:
+    /// appare solo quando l'export è in corso o appena concluso.
+    @ViewBuilder
+    private var exportStatusBar: some View {
+        if appState.processingState != .idle {
+            StatusBar(state: appState.processingState) {
+                appState.cancelExport()
+            }
+            .padding(.horizontal, LiquidGlassDesign.padding)
+            .padding(.vertical, 10)
+            .glassEffect(.regular, in: .capsule)
+            .padding(.horizontal, LiquidGlassDesign.padding)
+            .padding(.bottom, LiquidGlassDesign.spacing)
+        }
+    }
+
     private var addButton: some View {
         Button {
             addFiles()
