@@ -14,6 +14,9 @@ final class PlayerController: ObservableObject {
     @Published private(set) var hasMedia = false
     @Published private(set) var mediaName: String?
     @Published private(set) var errorMessage: String?
+    @Published private(set) var playbackRate: Float = 1.0
+
+    static let availableRates: [Float] = [0.5, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5]
 
     let player = AVPlayer()
 
@@ -91,6 +94,9 @@ final class PlayerController: ObservableObject {
                 guard self.loadIdentifier == identifier else { return }
 
                 let item = AVPlayerItem(asset: asset)
+                // Pitch corretto anche alle alte velocità: qualità migliore
+                // per il parlato delle lezioni rispetto al default.
+                item.audioTimePitchAlgorithm = .spectral
                 self.player.replaceCurrentItem(with: item)
                 self.installPlaybackEndObserver(for: item)
                 self.duration = assetDuration.seconds.isFinite ? max(0, assetDuration.seconds) : 0
@@ -111,6 +117,16 @@ final class PlayerController: ObservableObject {
     func unloadMedia() {
         resetMedia()
         errorMessage = nil
+    }
+
+    func setPlaybackRate(_ rate: Float) {
+        guard Self.availableRates.contains(rate) else { return }
+        playbackRate = rate
+        // defaultRate è l'API nativa: play() e i riavvii ripartono da qui.
+        player.defaultRate = rate
+        if isPlaying {
+            player.rate = rate
+        }
     }
 
     func togglePlayback() {
@@ -224,6 +240,8 @@ final class PlayerController: ObservableObject {
         videoAspectRatio = nil
         hasMedia = false
         mediaName = nil
+        playbackRate = 1.0
+        player.defaultRate = 1.0
     }
 
     private func updateCurrentTime(_ seconds: TimeInterval) {

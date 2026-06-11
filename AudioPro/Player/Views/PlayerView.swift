@@ -140,6 +140,15 @@ struct PlayerView: View {
         VStack(spacing: 8) {
             HStack(spacing: LiquidGlassDesign.spacing) {
                 Button {
+                    playerController.seekBy(-5)
+                } label: {
+                    Image(systemName: "gobackward.5")
+                }
+                .buttonStyle(.borderless)
+                .help("Indietro di 5 secondi (←)")
+                .accessibilityLabel("Indietro di 5 secondi")
+
+                Button {
                     playerController.togglePlayback()
                 } label: {
                     Image(systemName: playerController.isPlaying ? "pause.fill" : "play.fill")
@@ -152,6 +161,15 @@ struct PlayerView: View {
                 .keyboardShortcut(.space, modifiers: [])
                 .help(playerController.isPlaying ? "Pausa (Spazio)" : "Riproduci (Spazio)")
                 .accessibilityLabel(playerController.isPlaying ? "Pausa" : "Riproduci")
+
+                Button {
+                    playerController.seekBy(5)
+                } label: {
+                    Image(systemName: "goforward.5")
+                }
+                .buttonStyle(.borderless)
+                .help("Avanti di 5 secondi (→)")
+                .accessibilityLabel("Avanti di 5 secondi")
 
                 Text(displayTime.playerDisplayString)
                     .font(.caption)
@@ -182,6 +200,25 @@ struct PlayerView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+
+                Menu {
+                    Picker("Velocità", selection: Binding(
+                        get: { playerController.playbackRate },
+                        set: { playerController.setPlaybackRate($0) }
+                    )) {
+                        ForEach(PlayerController.availableRates, id: \.self) { rate in
+                            Text(Self.rateLabel(rate)).tag(rate)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    Text(Self.rateLabel(playerController.playbackRate))
+                        .font(.caption)
+                        .monospacedDigit()
+                }
+                .fixedSize()
+                .help("Velocità di riproduzione")
+                .accessibilityLabel("Velocità di riproduzione")
             }
 
             HStack {
@@ -223,6 +260,11 @@ struct PlayerView: View {
 
     private var displayTime: TimeInterval {
         isScrubbing ? scrubValue : playerController.currentTime
+    }
+
+    private static func rateLabel(_ rate: Float) -> String {
+        let number = Double(rate).formatted(.number.precision(.fractionLength(0...2)))
+        return "\(number)×"
     }
 
     // Ricreata a ogni body (4×/s in riproduzione, currentTime è @Published su
