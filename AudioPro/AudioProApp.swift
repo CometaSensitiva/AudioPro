@@ -25,7 +25,7 @@ struct AudioProApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 480, height: 560)
         .commands {
-            CommandGroup(replacing: .newItem) { }
+            PlayerCommands()
         }
     }
 }

@@ -7,10 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		F61AEC162F00000000AAA016 /* AudioPro/LiquidGlassDesignSystem.swift in Sources */ = {isa = PBXBuildFile; fileRef = F61AEC152F00000000AAA015 /* AudioPro/LiquidGlassDesignSystem.swift */; };
-		F61AEC1A2F00000000AAA01A /* TranscriptPlayer/Models/SubtitleCue.swift in Sources */ = {isa = PBXBuildFile; fileRef = F61AEC182F00000000AAA018 /* TranscriptPlayer/Models/SubtitleCue.swift */; };
-		F61AEC1B2F00000000AAA01B /* TranscriptPlayer/Services/SRTParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = F61AEC192F00000000AAA019 /* TranscriptPlayer/Services/SRTParser.swift */; };
-		F61AEC1E2F00000000AAA01E /* AudioPro/Views/Components/WaveformHero.swift in Sources */ = {isa = PBXBuildFile; fileRef = F61AEC1D2F00000000AAA01D /* AudioPro/Views/Components/WaveformHero.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,12 +35,6 @@
 /* Begin PBXFileReference section */
 		F61AEAA12ED4DC6200BEDEE9 /* AudioPro.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioPro.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F61AEB012ED4F00000BEDEE9 /* AudioProTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AudioProTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		F61AEC012F00000000AAA001 /* TranscriptPlayer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TranscriptPlayer.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		F61AEC0A2F00000000AAA00A /* TranscriptPlayerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TranscriptPlayerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		F61AEC152F00000000AAA015 /* AudioPro/LiquidGlassDesignSystem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPro/LiquidGlassDesignSystem.swift; sourceTree = SOURCE_ROOT; };
-		F61AEC182F00000000AAA018 /* TranscriptPlayer/Models/SubtitleCue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptPlayer/Models/SubtitleCue.swift; sourceTree = SOURCE_ROOT; };
-		F61AEC192F00000000AAA019 /* TranscriptPlayer/Services/SRTParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptPlayer/Services/SRTParser.swift; sourceTree = SOURCE_ROOT; };
-		F61AEC1D2F00000000AAA01D /* AudioPro/Views/Components/WaveformHero.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPro/Views/Components/WaveformHero.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -56,16 +46,6 @@
 		F61AEB022ED4F00000BEDEE9 /* AudioProTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = AudioProTests;
-			sourceTree = "<group>";
-		};
-		F61AEC022F00000000AAA002 /* TranscriptPlayer */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = TranscriptPlayer;
-			sourceTree = "<group>";
-		};
-		F61AEC0B2F00000000AAA00B /* TranscriptPlayerTests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = TranscriptPlayerTests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -85,20 +65,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		F61AEC052F00000000AAA005 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F61AEC0E2F00000000AAA00E /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -107,10 +73,6 @@
 			children = (
 				F61AEAA32ED4DC6200BEDEE9 /* AudioPro */,
 				F61AEB022ED4F00000BEDEE9 /* AudioProTests */,
-				F61AEC022F00000000AAA002 /* TranscriptPlayer */,
-				F61AEC0B2F00000000AAA00B /* TranscriptPlayerTests */,
-				F61AEC172F00000000AAA017 /* Shared Sources */,
-				F61AEC1C2F00000000AAA01C /* Parser Test Sources */,
 				F61AEAA22ED4DC6200BEDEE9 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -120,28 +82,8 @@
 			children = (
 				F61AEAA12ED4DC6200BEDEE9 /* AudioPro.app */,
 				F61AEB012ED4F00000BEDEE9 /* AudioProTests.xctest */,
-				F61AEC012F00000000AAA001 /* TranscriptPlayer.app */,
-				F61AEC0A2F00000000AAA00A /* TranscriptPlayerTests.xctest */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		F61AEC172F00000000AAA017 /* Shared Sources */ = {
-			isa = PBXGroup;
-			children = (
-				F61AEC152F00000000AAA015 /* AudioPro/LiquidGlassDesignSystem.swift */,
-				F61AEC1D2F00000000AAA01D /* AudioPro/Views/Components/WaveformHero.swift */,
-			);
-			name = "Shared Sources";
-			sourceTree = "<group>";
-		};
-		F61AEC1C2F00000000AAA01C /* Parser Test Sources */ = {
-			isa = PBXGroup;
-			children = (
-				F61AEC182F00000000AAA018 /* TranscriptPlayer/Models/SubtitleCue.swift */,
-				F61AEC192F00000000AAA019 /* TranscriptPlayer/Services/SRTParser.swift */,
-			);
-			name = "Parser Test Sources";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -194,50 +136,6 @@
 			productReference = F61AEB012ED4F00000BEDEE9 /* AudioProTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		F61AEC032F00000000AAA003 /* TranscriptPlayer */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = F61AEC092F00000000AAA009 /* Build configuration list for PBXNativeTarget "TranscriptPlayer" */;
-			buildPhases = (
-				F61AEC042F00000000AAA004 /* Sources */,
-				F61AEC052F00000000AAA005 /* Frameworks */,
-				F61AEC062F00000000AAA006 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				F61AEC022F00000000AAA002 /* TranscriptPlayer */,
-			);
-			name = TranscriptPlayer;
-			packageProductDependencies = (
-			);
-			productName = TranscriptPlayer;
-			productReference = F61AEC012F00000000AAA001 /* TranscriptPlayer.app */;
-			productType = "com.apple.product-type.application";
-		};
-		F61AEC0C2F00000000AAA00C /* TranscriptPlayerTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = F61AEC122F00000000AAA012 /* Build configuration list for PBXNativeTarget "TranscriptPlayerTests" */;
-			buildPhases = (
-				F61AEC0D2F00000000AAA00D /* Sources */,
-				F61AEC0E2F00000000AAA00E /* Frameworks */,
-				F61AEC0F2F00000000AAA00F /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				F61AEC0B2F00000000AAA00B /* TranscriptPlayerTests */,
-			);
-			name = TranscriptPlayerTests;
-			packageProductDependencies = (
-			);
-			productName = TranscriptPlayerTests;
-			productReference = F61AEC0A2F00000000AAA00A /* TranscriptPlayerTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -255,12 +153,6 @@
 					F61AEB042ED4F00000BEDEE9 = {
 						CreatedOnToolsVersion = 26.1.1;
 						TestTargetID = F61AEAA02ED4DC6200BEDEE9;
-					};
-					F61AEC032F00000000AAA003 = {
-						CreatedOnToolsVersion = 26.5;
-					};
-					F61AEC0C2F00000000AAA00C = {
-						CreatedOnToolsVersion = 26.5;
 					};
 				};
 			};
@@ -280,8 +172,6 @@
 			targets = (
 				F61AEAA02ED4DC6200BEDEE9 /* AudioPro */,
 				F61AEB042ED4F00000BEDEE9 /* AudioProTests */,
-				F61AEC032F00000000AAA003 /* TranscriptPlayer */,
-				F61AEC0C2F00000000AAA00C /* TranscriptPlayerTests */,
 			);
 		};
 /* End PBXProject section */
@@ -295,20 +185,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		F61AEB072ED4F00000BEDEE9 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F61AEC062F00000000AAA006 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F61AEC0F2F00000000AAA00F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -355,24 +231,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F61AEC042F00000000AAA004 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				F61AEC162F00000000AAA016 /* AudioPro/LiquidGlassDesignSystem.swift in Sources */,
-				F61AEC1E2F00000000AAA01E /* AudioPro/Views/Components/WaveformHero.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F61AEC0D2F00000000AAA00D /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				F61AEC1B2F00000000AAA01B /* TranscriptPlayer/Services/SRTParser.swift in Sources */,
-				F61AEC1A2F00000000AAA01A /* TranscriptPlayer/Models/SubtitleCue.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -650,117 +508,6 @@
 			};
 			name = Release;
 		};
-		F61AEC072F00000000AAA007 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = TranscriptPlayer/TranscriptPlayer.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9DB532G4F2;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.michelemazza.TranscriptPlayer;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		F61AEC082F00000000AAA008 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_ENTITLEMENTS = TranscriptPlayer/TranscriptPlayer.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9DB532G4F2;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.michelemazza.TranscriptPlayer;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
-		F61AEC102F00000000AAA010 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9DB532G4F2;
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@loader_path/../Frameworks",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.michelemazza.TranscriptPlayerTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		F61AEC112F00000000AAA011 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 9DB532G4F2;
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@loader_path/../Frameworks",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.michelemazza.TranscriptPlayerTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -787,24 +534,6 @@
 			buildConfigurations = (
 				F61AEB092ED4F00000BEDEE9 /* Debug */,
 				F61AEB0A2ED4F00000BEDEE9 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		F61AEC092F00000000AAA009 /* Build configuration list for PBXNativeTarget "TranscriptPlayer" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				F61AEC072F00000000AAA007 /* Debug */,
-				F61AEC082F00000000AAA008 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		F61AEC122F00000000AAA012 /* Build configuration list for PBXNativeTarget "TranscriptPlayerTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				F61AEC102F00000000AAA010 /* Debug */,
-				F61AEC112F00000000AAA011 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

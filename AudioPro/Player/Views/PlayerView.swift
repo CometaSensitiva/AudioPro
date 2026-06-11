@@ -1,7 +1,7 @@
 import AVKit
 import SwiftUI
 
-struct TranscriptPlayerView: View {
+struct PlayerView: View {
     @StateObject private var playerController = PlayerController()
     @StateObject private var fileSelectionService = FileSelectionService()
     @State private var cues: [SubtitleCue] = []
@@ -24,7 +24,7 @@ struct TranscriptPlayerView: View {
                 WaveformBackdrop()
                     .ignoresSafeArea()
             }
-            .focusedSceneValue(\.transcriptPlayerActions, currentActions)
+            .focusedSceneValue(\.playerActions, currentActions)
             .onReceive(playerController.$currentTime) { time in
                 updateActiveCue(at: time)
             }
@@ -177,8 +177,8 @@ struct TranscriptPlayerView: View {
     // un ObservableObject: l'invalidazione è a livello di oggetto). Isolare la
     // pubblicazione richiederebbe @Observable o uno split del controller —
     // rimandato, vedi decision log. Costo: alloc struct + rivalidazione menu.
-    private var currentActions: TranscriptPlayerActions {
-        TranscriptPlayerActions(
+    private var currentActions: PlayerActions {
+        PlayerActions(
             isPlaying: playerController.isPlaying,
             hasMedia: playerController.hasMedia,
             togglePlayback: { playerController.togglePlayback() },
