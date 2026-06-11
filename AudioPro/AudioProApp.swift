@@ -23,7 +23,8 @@ struct AudioProApp: App {
             ContentView()
         }
         .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 480, height: 560)
+        // Sidebar (~220) + dettaglio + inspector opzionale (360)
+        .defaultSize(width: 920, height: 620)
         .commands {
             PlayerCommands()
         }

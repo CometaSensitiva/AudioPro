@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import AppKit
 
-struct DetailView: View {
+struct MergerDetailView: View {
     @EnvironmentObject private var appState: AudioAppState
     
     var body: some View {
@@ -161,10 +161,10 @@ private extension View {
     }
 }
 
-struct DetailView_Previews: PreviewProvider {
+struct MergerDetailView_Previews: PreviewProvider {
     @MainActor
     static var previews: some View {
-        DetailView()
+        MergerDetailView()
             .environmentObject(PreviewSamples.appState())
     }
 }
