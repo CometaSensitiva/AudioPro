@@ -31,4 +31,14 @@ final class SubtitleCueLookupTests: XCTestCase {
         XCTAssertNil(SubtitleCueLookup.activeCueID(in: cues, at: 13))
         XCTAssertNil(SubtitleCueLookup.activeCueID(in: cues, at: .infinity))
     }
+
+    func testFindsEnclosingCueWhenCuesOverlap() {
+        let overlapping = [
+            SubtitleCue(id: 1, start: 0, end: 10, text: "Esterna"),
+            SubtitleCue(id: 2, start: 5, end: 8, text: "Interna")
+        ]
+        XCTAssertEqual(SubtitleCueLookup.activeCueID(in: overlapping, at: 6), 2)
+        XCTAssertEqual(SubtitleCueLookup.activeCueID(in: overlapping, at: 9), 1)
+        XCTAssertNil(SubtitleCueLookup.activeCueID(in: overlapping, at: 11))
+    }
 }

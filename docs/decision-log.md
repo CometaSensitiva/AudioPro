@@ -63,3 +63,24 @@ Native button metrics differ slightly from the legacy capsule on macOS 26; fallb
 
 **Status**
 Accepted
+
+## 2026-06-11 — Remediation della code review xhigh
+
+**Context**
+La review a sforzo alto sul branch ha confermato 12 finding: 4 di correttezza (race del seek, cue sovrapposte, trappola transcriptRevision, pannello sbagliato rifocalizzato), più cleanup ed efficienza.
+
+**Options**
+- Applicare tutto subito.
+- Applicare correttezza + cleanup a basso rischio, rimandare gli interventi infrastrutturali.
+
+**Decision**
+Applicati i 4 fix di correttezza e i cleanup (formatTime condivisa, observer legato al media, API morte rimosse). Rimandati esplicitamente: riduzione fps/pausa del WaveformBackdrop (identità visiva di entrambe le app), matrix CI, Swift package per i sorgenti condivisi, isolamento di currentActions dai tick di currentTime (richiede @Observable).
+
+**Reason**
+I fix di correttezza sono piccoli e verificabili subito; gli interventi rimandati toccano infrastruttura o estetica condivisa e meritano una decisione dedicata.
+
+**Trade-off**
+La pubblicazione di focusedSceneValue resta a ~4 Hz durante la riproduzione (costo accettato e documentato nel codice).
+
+**Status**
+Accepted

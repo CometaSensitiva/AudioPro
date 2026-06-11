@@ -26,8 +26,17 @@ enum SubtitleCueLookup {
             }
         }
 
-        guard lowerBound > 0 else { return nil }
-        let candidate = cues[lowerBound - 1]
-        return time <= candidate.end ? candidate.id : nil
+        // Le cue possono sovrapporsi (annidate): se l'ultima per start non
+        // contiene il tempo, risali finché una lo contiene. Restituisce la cue
+        // iniziata più di recente che contiene il tempo. Nei gap di file non
+        // sovrapposti la risalita è O(n) nel caso peggiore: irrilevante a 4 Hz.
+        var index = lowerBound - 1
+        while index >= 0 {
+            if time <= cues[index].end {
+                return cues[index].id
+            }
+            index -= 1
+        }
+        return nil
     }
 }

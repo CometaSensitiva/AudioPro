@@ -1,16 +1,18 @@
 import SwiftUI
 
 struct TranscriptListView: View, Equatable {
-    let transcriptRevision: UUID
     let cues: [SubtitleCue]
     let activeCueID: SubtitleCue.ID?
     let canSeek: Bool
     let onSelect: (SubtitleCue) -> Void
 
+    // onSelect è escluso di proposito: viene ricreato a ogni body del parent.
+    // Il confronto di cues è O(n) solo quando il resto è uguale, e corto-
+    // circuita sui cambi frequenti (activeCueID).
     static func == (lhs: TranscriptListView, rhs: TranscriptListView) -> Bool {
-        lhs.transcriptRevision == rhs.transcriptRevision
-            && lhs.activeCueID == rhs.activeCueID
+        lhs.activeCueID == rhs.activeCueID
             && lhs.canSeek == rhs.canSeek
+            && lhs.cues == rhs.cues
     }
 
     var body: some View {
@@ -41,7 +43,7 @@ struct TranscriptListView: View, Equatable {
             onSelect(cue)
         } label: {
             HStack(alignment: .top, spacing: 12) {
-                Text("\(formatTime(cue.start)) → \(formatTime(cue.end))")
+                Text("\(cue.start.playerDisplayString) → \(cue.end.playerDisplayString)")
                     .font(.caption)
                     .foregroundStyle(isActive ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
                     .monospacedDigit()
@@ -74,16 +76,5 @@ struct TranscriptListView: View, Equatable {
         } else {
             row
         }
-    }
-
-    private func formatTime(_ seconds: TimeInterval) -> String {
-        let value = max(0, Int(seconds.rounded(.down)))
-        let hours = value / 3_600
-        let minutes = (value % 3_600) / 60
-        let remainingSeconds = value % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
-        }
-        return String(format: "%d:%02d", minutes, remainingSeconds)
     }
 }
