@@ -1,14 +1,15 @@
-# AudioPro Workspace Architecture
+# AudioPro Architecture
 
-The Xcode project contains two independent macOS applications. They share only the compatibility design system; TranscriptPlayer does not depend on AudioPro processing code or its bundled ffmpeg helpers.
+The Xcode project contains a single macOS application with two sidebar sections: Esportazione (the ffmpeg-based export pipeline) and Trascrizione (AVFoundation playback with synchronized SRT transcript). The player layer under `AudioPro/Player/` has no dependency on the processing layer and does not execute ffmpeg.
 
 ```mermaid
 flowchart TD
-    Design["LiquidGlassDesignSystem.swift"] --> AudioPro["AudioPro target"]
-    Design --> TranscriptPlayer["TranscriptPlayer target"]
-    AudioPro --> AudioTests["AudioProTests"]
-    TranscriptSources["SRTParser + SubtitleCue"] --> TranscriptPlayer
-    TranscriptSources --> TranscriptTests["TranscriptPlayerTests"]
+    CV["ContentView (NavigationSplitView)"] --> Sidebar["Sections + file queue"]
+    CV --> Merger["MergerDetailView"]
+    CV --> Player["PlayerView"]
+    Merger --> State["AudioAppState → ExportPreview → AudioProcessor"]
+    Player --> PM["PlayerModel → PlayerController/SRTParser"]
+    AudioPro["AudioPro target"] --> AudioTests["AudioProTests (incl. parser logic tests)"]
 ```
 
 ## AudioPro
@@ -234,9 +235,9 @@ flowchart LR
 - CI validates build and tests only; it does not publish end-user artifacts.
 - Without Apple Developer notarization, end users must use the standard Gatekeeper override flow on first launch.
 
-## TranscriptPlayer
+## Trascrizione section (Player layer)
 
-TranscriptPlayer is a separate sandboxed macOS app that uses AVFoundation and AVKit directly. It has no target dependency on AudioPro and does not execute ffmpeg.
+The Trascrizione section (`AudioPro/Player/`) uses AVFoundation and AVKit directly and does not execute ffmpeg. `PlayerModel` is owned by `ContentView`, so playback and the loaded transcript survive switching to the Esportazione section.
 
 ```mermaid
 flowchart LR
@@ -256,5 +257,5 @@ flowchart LR
 - SRT access is short-lived: the app opens the selected URL, reads it, and immediately releases the security scope.
 - Media access remains active until another media file is selected or the controller is destroyed.
 - `SRTParser` accepts UTF-8 and ISO Latin-1, normalizes line endings, preserves multiline cue text, rejects invalid cues, and sorts valid cues by start time.
-- `TranscriptPlayerTests` is a logic test target that compiles the parser and cue model directly, avoiding an application-host dependency.
-- The shared `TranscriptPlayer` scheme builds the app and runs parser tests. CI also verifies a Release build.
+- The parser and cue-lookup logic tests live in `AudioProTests` (`SRTParserTests`, `SubtitleCueLookupTests`) via `@testable import AudioPro`.
+- The shared `AudioPro` scheme builds the app and runs the whole suite. CI also verifies a Release build.

@@ -1,15 +1,15 @@
 # AudioPro
 
 [![CI](https://github.com/CometaSensitiva/AudioPro/actions/workflows/ci.yml/badge.svg)](https://github.com/CometaSensitiva/AudioPro/actions/workflows/ci.yml)
-![Platform](https://img.shields.io/badge/platform-macOS%2014%2B-0A84FF)
+![Platform](https://img.shields.io/badge/platform-macOS%2026%2B-0A84FF)
 [![License](https://img.shields.io/badge/license-MIT-2EA043)](LICENSE)
 
-This repository contains two focused Tahoe-style macOS apps:
+AudioPro is a single Liquid Glass macOS app with two sidebar sections:
 
-- **AudioPro** imports audio or video files and produces optimized audio output or a compressed video export preset.
-- **TranscriptPlayer** plays audio or video alongside a manually selected SRT transcript with synchronized highlighting and click-to-seek navigation.
+- **Esportazione** imports audio or video files and produces optimized audio output or a compressed video export preset.
+- **Trascrizione** plays audio or video alongside a manually selected SRT transcript with synchronized highlighting and click-to-seek navigation.
 
-Both apps share a small compatibility design layer while targeting `macOS 14+`.
+Playback keeps running while you work in the export section. The UI follows Apple's Liquid Glass guidance: a static ambient backdrop, glass only on the functional layer (transport bar, floating export status), and a waveform that animates only during playback or export.
 
 ## Highlights
 
@@ -18,8 +18,9 @@ Both apps share a small compatibility design layer while targeting `macOS 14+`.
 - Merge multiple audio files into a single export.
 - Use a dedicated compressed video preset for single lecture recordings.
 - Bundle `ffmpeg` helpers with build-time hash verification and runtime signature checks.
-- Load SRT transcripts independently from media files in TranscriptPlayer.
+- Load SRT transcripts independently from media files in the Trascrizione section.
 - Follow the active subtitle cue with automatic scrolling and click any cue to seek.
+- Zero idle CPU: the background waveform animates only while audio plays or an export runs, and respects Reduce Motion.
 
 ## Screenshots
 
@@ -52,19 +53,21 @@ The technical architecture is documented in [docs/architecture.md](docs/architec
 
 ```mermaid
 flowchart TD
-    Design["LiquidGlassDesignSystem.swift"] --> AudioProTarget["AudioPro target"]
-    Design --> TranscriptTarget["TranscriptPlayer target"]
-    AudioProTarget --> FFmpeg["Bundled ffmpeg helpers"]
-    TranscriptTarget --> AVPlayer["AVPlayer"]
-    TranscriptTarget --> SRT["SRTParser"]
+    CV["ContentView (NavigationSplitView)"] --> Sidebar["Sidebar: sections + file queue"]
+    CV --> Merger["MergerDetailView (Esportazione)"]
+    CV --> Player["PlayerView (Trascrizione)"]
+    Merger --> FFmpeg["Bundled ffmpeg helpers"]
+    Player --> PM["PlayerModel"]
+    PM --> AVPlayer["AVPlayer"]
+    PM --> SRT["SRTParser"]
+    Backdrop["AmbientBackdrop + ReactiveWaveform"] --> Merger
+    Backdrop --> Player
 ```
 
 ## Project structure
 
-- `AudioPro/`: app source files
-- `AudioProTests/`: test target
-- `TranscriptPlayer/`: transcript player app source files
-- `TranscriptPlayerTests/`: SRT parser logic tests
+- `AudioPro/`: app source files (`Player/` holds the Trascrizione section: model, services, views)
+- `AudioProTests/`: test target (includes the SRT parser logic tests)
 - `AudioPro.xcodeproj/`: Xcode project
 - `docs/`: technical documentation and screenshots
 - `experiments/`: retained prototypes and visual experiments
@@ -72,12 +75,9 @@ flowchart TD
 
 ## Development
 
-Open `AudioPro.xcodeproj` in Xcode and choose one of the shared schemes:
+Open `AudioPro.xcodeproj` in Xcode and use the shared `AudioPro` scheme.
 
-- `AudioPro`
-- `TranscriptPlayer`
-
-Minimum supported OS: `macOS 14.0`.
+Minimum supported OS: `macOS 26.0`.
 
 ## GitHub Releases
 
@@ -91,9 +91,7 @@ To produce a release archive locally:
 
 The script builds the `Release` configuration, verifies the packaged `ffmpeg` helpers, creates a versioned ZIP archive, and writes `SHA256SUMS.txt`.
 
-CI builds and tests both applications but does not publish end-user artifacts.
-
-TranscriptPlayer is currently a source and CI deliverable only; `scripts/build-release.sh` continues to package AudioPro exclusively.
+CI builds and tests the application but does not publish end-user artifacts.
 
 ## Changelog
 

@@ -26,3 +26,15 @@ Related concepts: [[AVPlayer]], [[SwiftUI]], [[Asset catalog]], [[Code review]]
 - `safeAreaInset(edge: .bottom)` is the idiomatic way to build a Music-style floating player bar that content scrolls behind.
 
 Related concepts: [[SwiftUI]], [[Liquid Glass]], [[HIG]], [[FocusedValues]]
+
+## 2026-06-11 — Unified app, ambient backdrop, native-only glass
+
+- Liquid Glass belongs to the *functional layer* (toolbars, floating controls), never to content, and never stacks on other glass: the unsatisfying rendering came from a glass list under a glass bar over a moving background.
+- Glass refracts what sits behind it: a rich but *static* backdrop (MeshGradient) renders better than a continuously animated one.
+- `TimelineView(.animation(minimumInterval:paused:))` + phase derived from `context.date` replaces per-frame `@State` mutation: pausing freezes the canvas at zero CPU and Reduce Motion falls out naturally.
+- With `PBXFileSystemSynchronizedRootGroup`, merging targets is mostly `git mv`: moved files compile automatically; the project file only needs *deletions* (enumerate the doomed object IDs, then strip lines/blocks).
+- `GlassEffectContainer` + a shared `.glassEffectID` morphs one glass element between shapes (capsule ↔ transport bar) when the underlying state changes.
+- Plain-key menu equivalents (Space, arrows) are checked *after* the first responder: a sidebar `List` can silently eat them. A `.keyboardShortcut` on a window-visible button is a window-level equivalent and wins.
+- View-owned `@StateObject` dies with the view: hoisting player state into a root-owned model is what lets audio survive a section switch.
+
+Related concepts: [[Liquid Glass]], [[SwiftUI]], [[TimelineView]], [[MeshGradient]], [[Xcode project format]], [[FocusedValues]]

@@ -20,7 +20,7 @@ The apps keep separate responsibilities while reusing the established visual lan
 The project file and CI contain additional targets, and the shared source is linked explicitly.
 
 **Status**
-Accepted
+Superseded (2026-06-11, see "Unified app with sidebar sections")
 
 ## 2026-06-11 — TranscriptPlayer visual identity and shared backdrop
 
@@ -41,7 +41,7 @@ Glass surfaces are Materials and only come alive over a colored backdrop; sharin
 One more explicitly linked shared source in the project file.
 
 **Status**
-Accepted
+Superseded (2026-06-11, see "Ambient backdrop with state-driven waveform")
 
 ## 2026-06-11 — Native Liquid Glass adoption and HIG layout for TranscriptPlayer
 
@@ -81,6 +81,71 @@ I fix di correttezza sono piccoli e verificabili subito; gli interventi rimandat
 
 **Trade-off**
 La pubblicazione di focusedSceneValue resta a ~4 Hz durante la riproduzione (costo accettato e documentato nel codice).
+
+**Status**
+Accepted
+
+## 2026-06-11 — Unified app with sidebar sections
+
+**Context**
+Two separate apps duplicated maintenance and visual identity work, and the export → re-listen-with-transcript flow crossed app boundaries. The Liquid Glass rendering in TranscriptPlayer was unsatisfying.
+
+**Options**
+- Keep two apps and only unify the design system.
+- Merge TranscriptPlayer into AudioPro as a secondary window.
+- Merge as a sidebar section in a single window (Landmarks-style).
+
+**Decision**
+Single AudioPro app with a `NavigationSplitView` sidebar holding two sections (Esportazione, Trascrizione) plus the file queue. Player state lives in `PlayerModel`, owned by the root so playback survives section switches. The TranscriptPlayer target, scheme and CI steps were removed; parser tests moved into `AudioProTests`.
+
+**Reason**
+One product to maintain, one design system, natural flow between the two features; `PBXFileSystemSynchronizedRootGroup` made the merge nearly free (only deletions in the project file).
+
+**Trade-off**
+TranscriptPlayer no longer exists as an independent app; plain-key menu shortcuts had to move to a window-level equivalent because the sidebar List can consume them (Space now lives on the play/pause button).
+
+**Status**
+Accepted
+
+## 2026-06-11 — Ambient backdrop with state-driven waveform
+
+**Context**
+`WaveformBackdrop` ran a 30 fps `TimelineView`+`Canvas` loop even when idle (documented battery drain, deferred in the previous review), and glass refracting a continuously moving background rendered poorly.
+
+**Options**
+- Keep the animated waveform but pause it when the window is inactive.
+- Static backdrop only, no waveform.
+- Static ambient backdrop + waveform animated only when meaningful.
+
+**Decision**
+`AmbientBackdrop` (static `MeshGradient`, sidebar/detail styles, historical palette) + `ReactiveWaveform` (the 64-bar canvas, `paused:` TimelineView, phase derived from `context.date`, `accessibilityReduceMotion` respected). Active only during playback (Trascrizione) and export (Esportazione).
+
+**Reason**
+Idle CPU measured at ~0% after the change (was a continuous 30 fps loop); glass now refracts a rich-but-calm background per Apple guidance; the waveform gains meaning by reflecting actual audio activity.
+
+**Trade-off**
+The always-moving visual identity is gone at rest; the waveform is now a feedback element rather than a permanent decoration.
+
+**Status**
+Accepted
+
+## 2026-06-11 — macOS 26 minimum, glass only on the functional layer
+
+**Context**
+The dual-path design system (native glass + Material fallback for macOS 14–15) doubled every styling decision, and glass was applied to content surfaces (transcript list, cards, sidebar rows), violating Apple's Liquid Glass guidance.
+
+**Options**
+- Keep macOS 14+ and replicate every new pattern in the fallback.
+- Raise the minimum to macOS 26 and go native-only.
+
+**Decision**
+`MACOSX_DEPLOYMENT_TARGET = 26.0`. `LiquidGlassDesignSystem.swift` is tokens-only; glass is applied with native APIs at exactly two functional call sites: the player transport bar (with `GlassEffectContainer` + `glassEffectID` capsule↔bar morphing) and the floating export status capsule. Content uses materials and tint fills.
+
+**Reason**
+Glass belongs to the functional layer (toolbars, floating controls), never to content, and never stacks on other glass — the previous list-over-glass-under-glass-bar layout was the source of the unsatisfying rendering. Removing the fallback deleted ~150 lines and unlocked `MeshGradient`, `scrollEdgeEffectStyle`, `ToolbarSpacer` and morphing.
+
+**Trade-off**
+The app no longer runs on macOS 14–15 (CHANGELOG 1.0.0 had deliberately lowered the target).
 
 **Status**
 Accepted

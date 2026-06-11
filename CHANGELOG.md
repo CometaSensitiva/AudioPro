@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-06-11
+
+- **Breaking**: raised the minimum supported OS to `macOS 26` and removed the Material compatibility layer; the design system is native Liquid Glass only.
+- Merged TranscriptPlayer into the AudioPro app as the `Trascrizione` sidebar section; the standalone target, scheme and CI steps were removed.
+- New unified navigation: sections sidebar with the export file queue, active search filter, playback that survives section switches (`PlayerModel`).
+- Replaced the always-on animated waveform background with a static `MeshGradient` ambient backdrop plus a state-driven waveform (animates only during playback/export, respects Reduce Motion, ~0% idle CPU).
+- Glass now lives only on the functional layer: morphing player transport bar and floating export status capsule; content uses materials and tint fills.
+- Moved the Space transport shortcut to a window-level key equivalent so it works regardless of sidebar focus.
+
 ## [1.0.0] - 2026-03-24
 
 - Added a dedicated `Video compresso` export mode for single video sources.
