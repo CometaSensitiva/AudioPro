@@ -8,6 +8,7 @@ struct PlayerView: View {
     @ObservedObject private var playerController: PlayerController
     @State private var isScrubbing = false
     @State private var scrubValue: TimeInterval = 0
+    @FocusState private var isSearchFieldFocused: Bool
     @Namespace private var glassNamespace
 
     init(model: PlayerModel) {
@@ -38,6 +39,10 @@ struct PlayerView: View {
 
     private var content: some View {
         VStack(spacing: LiquidGlassDesign.spacing) {
+            if model.isTranscriptSearchVisible {
+                transcriptSearchBar
+            }
+
             if playerController.hasVideo {
                 VideoPlayer(player: playerController.player)
                     .aspectRatio(playerController.videoAspectRatio ?? 16 / 9, contentMode: .fit)
@@ -62,6 +67,8 @@ struct PlayerView: View {
                 TranscriptListView(
                     cues: model.cues,
                     activeCueID: model.activeCueID,
+                    matchIDs: Set(model.matchIDs),
+                    currentMatchID: model.currentMatchID,
                     canSeek: playerController.hasMedia
                 ) { cue in
                     playerController.seek(to: cue.start)
@@ -93,6 +100,15 @@ struct PlayerView: View {
             .labelStyle(.iconOnly)
             .help("Apri una trascrizione SRT (⇧⌘O)")
 
+            Button {
+                model.startTranscriptSearch()
+            } label: {
+                Label("Cerca nella trascrizione", systemImage: "magnifyingglass")
+            }
+            .labelStyle(.iconOnly)
+            .help("Cerca nella trascrizione (⌘F)")
+            .disabled(model.cues.isEmpty)
+
             Button(role: .destructive) {
                 model.clearAll()
             } label: {
@@ -102,6 +118,67 @@ struct PlayerView: View {
             .help("Svuota media e trascrizione")
             .disabled(model.isEmpty)
         }
+    }
+
+    /// Campo di ricerca della trascrizione: layer contenuto (material, non
+    /// glass). Enter = match successivo con seek; Esc chiude.
+    private var transcriptSearchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+
+            TextField("Cerca nella trascrizione…", text: $model.transcriptQuery)
+                .textFieldStyle(.plain)
+                .focused($isSearchFieldFocused)
+                .onSubmit { model.nextMatch() }
+
+            if model.transcriptQuery.isEmpty == false {
+                Text(matchCounterLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            Button {
+                model.previousMatch()
+            } label: {
+                Image(systemName: "chevron.up")
+            }
+            .buttonStyle(.borderless)
+            .disabled(model.matchIDs.isEmpty)
+            .help("Match precedente")
+
+            Button {
+                model.nextMatch()
+            } label: {
+                Image(systemName: "chevron.down")
+            }
+            .buttonStyle(.borderless)
+            .disabled(model.matchIDs.isEmpty)
+            .help("Match successivo (⏎)")
+
+            Button {
+                model.closeTranscriptSearch()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+            }
+            .buttonStyle(.borderless)
+            .help("Chiudi ricerca (Esc)")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onExitCommand { model.closeTranscriptSearch() }
+        .onAppear { isSearchFieldFocused = true }
+    }
+
+    private var matchCounterLabel: String {
+        let matches = model.matchIDs
+        guard matches.isEmpty == false else { return "0 risultati" }
+        if let current = model.currentMatchID, let index = matches.firstIndex(of: current) {
+            return "\(index + 1) di \(matches.count)"
+        }
+        return "\(matches.count) risultati"
     }
 
     /// Unico elemento glass della sezione: senza media è una capsula di invito,
@@ -275,10 +352,12 @@ struct PlayerView: View {
         PlayerActions(
             isPlaying: playerController.isPlaying,
             hasMedia: playerController.hasMedia,
+            canSearchTranscript: !model.cues.isEmpty,
             togglePlayback: { playerController.togglePlayback() },
             seekBy: { playerController.seekBy($0) },
             openMedia: { model.chooseMedia() },
-            openSRT: { model.chooseSRT() }
+            openSRT: { model.chooseSRT() },
+            startTranscriptSearch: { model.startTranscriptSearch() }
         )
     }
 }
