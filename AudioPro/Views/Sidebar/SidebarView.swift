@@ -18,7 +18,8 @@ struct SidebarView: View {
     
     var body: some View {
         ZStack {
-            SidebarBackdrop()
+            AmbientBackdrop(style: .sidebar)
+                .ignoresSafeArea(.container, edges: [.top, .leading, .bottom])
             List(selection: $section) {
                 Section("Sezioni") {
                     ForEach(AppSection.allCases) { section in
@@ -306,23 +307,6 @@ private struct ListEndDropDelegate: DropDelegate {
         draggingFileID = nil
         isDropAtEndActive = false
         return isEnabled
-    }
-}
-
-private struct SidebarBackdrop: View {
-    var body: some View {
-        LinearGradient(colors: [
-            Color.blue.opacity(0.18),
-            Color.purple.opacity(0.14)
-        ], startPoint: .topLeading, endPoint: .bottomTrailing)
-        .overlay {
-            RadialGradient(colors: [
-                Color.white.opacity(0.12),
-                Color.clear
-            ], center: .topLeading, startRadius: 40, endRadius: 360)
-            .offset(x: -40, y: -80)
-        }
-        .ignoresSafeArea(.container, edges: [.top, .leading, .bottom])
     }
 }
 
