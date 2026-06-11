@@ -75,8 +75,27 @@ final class ExportPreviewTests: XCTestCase {
         XCTAssertTrue(preview.isVideoModeActive)
         XCTAssertEqual(preview.effectiveExportMode, .videoCompressed)
         XCTAssertEqual(preview.compressionSummary, VideoCompressionPreset.teamsLecture.summary)
-        XCTAssertEqual(preview.estimatedOutputLabel, "—")
-        XCTAssertEqual(preview.savingsLabel, "—")
+        // Preset fisso 1500 kbps: 2400 s -> (1500 * 2400) / 8000 = 450 MB,
+        // risparmio su 600 MB di sorgente = 25%.
+        XCTAssertEqual(preview.estimatedOutputSizeMB ?? 0, 450, accuracy: 0.001)
+        XCTAssertEqual(preview.savingsRatio ?? 0, 0.25, accuracy: 0.001)
+        XCTAssertEqual(preview.estimatedOutputLabel, "~450.00 MB")
+        XCTAssertEqual(preview.savingsLabel, "~25%")
+    }
+
+    func testVideoModeEstimateNeedsDuration() {
+        var settings = CompressionSettings.medium
+        settings.exportMode = .videoCompressed
+
+        let file = AudioFile(url: URL(fileURLWithPath: "/tmp/pending.mp4"), loadMetadata: false)
+        file.fileSize = 600_000_000
+        file.metadataState = .loading
+
+        let preview = ExportPreview.make(files: [file], compression: settings)
+
+        XCTAssertTrue(preview.isVideoModeActive)
+        XCTAssertNil(preview.estimatedOutputSizeMB)
+        XCTAssertNil(preview.savingsRatio)
     }
 
     func testVideoModeFallsBackToAudioOnlyForMixedSelection() {

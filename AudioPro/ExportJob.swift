@@ -28,6 +28,14 @@ struct VideoCompressionPreset: Sendable, Equatable {
         audioCodec: "copy"
     )
 
+    /// Bitrate video in kbps derivato da `videoBitrate` (es. "1500k"):
+    /// il preset è fisso, quindi la stima di output è deterministica.
+    var videoBitrateKbps: Double? {
+        guard videoBitrate.hasSuffix("k"),
+              let value = Double(videoBitrate.dropLast()) else { return nil }
+        return value
+    }
+
     var summary: String {
         "HEVC 1500 kbps · 1080p · 30 fps · Audio copy"
     }

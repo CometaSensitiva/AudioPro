@@ -77,9 +77,6 @@ struct ExportPreview: Equatable, Sendable {
     }
 
     var estimatedOutputLabel: String {
-        if isVideoModeActive {
-            return "—"
-        }
         guard let estimatedOutputSizeMB else {
             return pendingMetadataCount > 0 ? "Analizzo..." : "—"
         }
@@ -87,9 +84,6 @@ struct ExportPreview: Equatable, Sendable {
     }
 
     var savingsLabel: String {
-        if isVideoModeActive {
-            return "—"
-        }
         guard let savingsRatio else {
             return pendingMetadataCount > 0 ? "Analizzo..." : "—"
         }
@@ -180,17 +174,19 @@ struct ExportPreview: Equatable, Sendable {
             effectiveExportMode: effectiveExportMode,
             validation: validation
         )
-        let estimatedOutputSizeMB = effectiveExportMode == .audioOnly
-            ? estimateOutputSizeMB(
+        let estimatedOutputSizeMB: Double?
+        switch effectiveExportMode {
+        case .audioOnly:
+            estimatedOutputSizeMB = estimateOutputSizeMB(
                 totalDuration: totalDuration,
                 totalFileSize: totalFileSize,
                 resolvedBitrateKbps: resolvedBitrateKbps,
                 effectiveCodec: effectiveCodec
             )
-            : nil
-        let savingsRatio = effectiveExportMode == .audioOnly
-            ? savingsRatio(totalFileSize: totalFileSize, estimatedOutputSizeMB: estimatedOutputSizeMB)
-            : nil
+        case .videoCompressed:
+            estimatedOutputSizeMB = estimateVideoOutputSizeMB(totalDuration: totalDuration)
+        }
+        let savingsRatio = savingsRatio(totalFileSize: totalFileSize, estimatedOutputSizeMB: estimatedOutputSizeMB)
         let videoCompressionSummary = effectiveExportMode == .videoCompressed
             ? VideoCompressionPreset.teamsLecture.summary
             : nil
@@ -305,6 +301,16 @@ struct ExportPreview: Equatable, Sendable {
         let bytesPerSecond = (resolvedBitrateKbps * 1_000) / 8
         let totalBytes = bytesPerSecond * totalDuration
         return totalBytes / 1_000_000
+    }
+
+    /// Stima per il video compresso: il preset è fisso (HEVC 1500 kbps,
+    /// audio copiato), quindi il termine dominante è il bitrate video;
+    /// il contributo dell'audio copiato non è noto ma resta marginale.
+    private static func estimateVideoOutputSizeMB(totalDuration: TimeInterval?) -> Double? {
+        guard let totalDuration,
+              let videoBitrateKbps = VideoCompressionPreset.teamsLecture.videoBitrateKbps else { return nil }
+        let bytesPerSecond = (videoBitrateKbps * 1_000) / 8
+        return (bytesPerSecond * totalDuration) / 1_000_000
     }
 
     private static func savingsRatio(totalFileSize: Int64?, estimatedOutputSizeMB: Double?) -> Double? {
