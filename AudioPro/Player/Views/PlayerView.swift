@@ -2,20 +2,22 @@ import AVKit
 import SwiftUI
 
 struct PlayerView: View {
-    @StateObject private var playerController = PlayerController()
-    @StateObject private var fileSelectionService = FileSelectionService()
-    @State private var cues: [SubtitleCue] = []
-    @State private var activeCueID: SubtitleCue.ID?
-    @State private var srtFileName: String?
-    @State private var srtErrorMessage: String?
+    @ObservedObject private var model: PlayerModel
+    // Osservato direttamente: le @Published del controller (currentTime,
+    // isPlaying...) invalidano la view senza passare dal modello.
+    @ObservedObject private var playerController: PlayerController
     @State private var isScrubbing = false
     @State private var scrubValue: TimeInterval = 0
+
+    init(model: PlayerModel) {
+        self._model = ObservedObject(wrappedValue: model)
+        self._playerController = ObservedObject(wrappedValue: model.playerController)
+    }
 
     var body: some View {
         content
             .safeAreaInset(edge: .bottom, spacing: 0) { playerBar }
             .toolbar { toolbarContent }
-            .navigationTitle("TranscriptPlayer")
             .navigationSubtitle(playerController.mediaName ?? "Nessun media")
             .frame(minWidth: 460, minHeight: 540)
             .background {
@@ -26,7 +28,7 @@ struct PlayerView: View {
             }
             .focusedSceneValue(\.playerActions, currentActions)
             .onReceive(playerController.$currentTime) { time in
-                updateActiveCue(at: time)
+                model.updateActiveCue(at: time)
             }
     }
 
@@ -40,12 +42,12 @@ struct PlayerView: View {
 
             statusArea
 
-            if cues.isEmpty {
+            if model.cues.isEmpty {
                 emptyTranscript
             } else {
                 TranscriptListView(
-                    cues: cues,
-                    activeCueID: activeCueID,
+                    cues: model.cues,
+                    activeCueID: model.activeCueID,
                     canSeek: playerController.hasMedia
                 ) { cue in
                     playerController.seek(to: cue.start)
@@ -62,7 +64,7 @@ struct PlayerView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             Button {
-                chooseMedia()
+                model.chooseMedia()
             } label: {
                 Label("Apri media", systemImage: "play.rectangle")
             }
@@ -70,7 +72,7 @@ struct PlayerView: View {
             .help("Apri un file audio o video (⌘O)")
 
             Button {
-                chooseSRT()
+                model.chooseSRT()
             } label: {
                 Label("Apri SRT", systemImage: "captions.bubble")
             }
@@ -128,7 +130,7 @@ struct PlayerView: View {
                 HStack {
                     Text(playerController.mediaName ?? "Nessun media selezionato")
                     Spacer()
-                    Text(srtFileName.map { "\($0) · \(cues.count) segmenti" } ?? "Nessun SRT selezionato")
+                    Text(model.srtFileName.map { "\($0) · \(model.cues.count) segmenti" } ?? "Nessun SRT selezionato")
                         .monospacedDigit()
                 }
                 .font(.caption)
@@ -146,12 +148,12 @@ struct PlayerView: View {
     @ViewBuilder
     private var statusArea: some View {
         if let message = playerController.errorMessage
-            ?? srtErrorMessage {
+            ?? model.srtErrorMessage {
             Label(message, systemImage: "exclamationmark.triangle.fill")
                 .font(.caption)
                 .foregroundStyle(.red)
                 .frame(maxWidth: .infinity, alignment: .leading)
-        } else if !cues.isEmpty && !playerController.hasMedia {
+        } else if !model.cues.isEmpty && !playerController.hasMedia {
             Text("La trascrizione è pronta. Seleziona un media per abilitare il salto tra i segmenti.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -183,52 +185,8 @@ struct PlayerView: View {
             hasMedia: playerController.hasMedia,
             togglePlayback: { playerController.togglePlayback() },
             seekBy: { playerController.seekBy($0) },
-            openMedia: { chooseMedia() },
-            openSRT: { chooseSRT() }
+            openMedia: { model.chooseMedia() },
+            openSRT: { model.chooseSRT() }
         )
-    }
-
-    private func chooseMedia() {
-        Task {
-            guard let url = await fileSelectionService.selectMedia() else { return }
-            playerController.loadMedia(from: url)
-        }
-    }
-
-    private func chooseSRT() {
-        Task {
-            guard let url = await fileSelectionService.selectSRT() else { return }
-            handleSRTImport(url)
-        }
-    }
-
-    private func handleSRTImport(_ url: URL) {
-        do {
-            let hasSecurityScope = url.startAccessingSecurityScopedResource()
-            defer {
-                if hasSecurityScope {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
-
-            let parsedCues = try SRTParser.load(from: url)
-            cues = parsedCues
-            srtFileName = url.lastPathComponent
-            srtErrorMessage = parsedCues.isEmpty
-                ? "Il file SRT non contiene segmenti validi."
-                : nil
-            updateActiveCue(at: playerController.currentTime)
-        } catch {
-            cues = []
-            activeCueID = nil
-            srtFileName = nil
-            srtErrorMessage = "Impossibile leggere il file SRT: \(error.localizedDescription)"
-        }
-    }
-
-    private func updateActiveCue(at time: TimeInterval) {
-        let nextCueID = SubtitleCueLookup.activeCueID(in: cues, at: time)
-        guard nextCueID != activeCueID else { return }
-        activeCueID = nextCueID
     }
 }

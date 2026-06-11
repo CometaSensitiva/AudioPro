@@ -1,15 +1,24 @@
 import SwiftUI
 
-/// Vista principale: split view con sidebar dei file e area dettaglio stile LandmarkDetail.
+/// Vista principale: split view con le sezioni dell'app in sidebar
+/// (Esportazione, Trascrizione) e dettaglio per sezione, stile Landmarks.
 struct ContentView: View {
     @StateObject private var appState = AudioAppState()
-    
+    @StateObject private var playerModel = PlayerModel()
+    @State private var section: AppSection = .merger
+
     var body: some View {
         NavigationSplitView {
-            SidebarView()
+            SidebarView(section: $section)
         } detail: {
-            DetailView()
+            switch section {
+            case .merger:
+                MergerDetailView()
+            case .player:
+                PlayerView(model: playerModel)
+            }
         }
+        .searchable(text: $appState.searchText, prompt: "Cerca nella coda file")
         .environmentObject(appState)
     }
 }

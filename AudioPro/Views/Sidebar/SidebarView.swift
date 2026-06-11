@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct SidebarView: View {
+    @Binding var section: AppSection
     @EnvironmentObject private var appState: AudioAppState
     @State private var draggingFileID: UUID?
     @State private var activeDropTargetID: UUID?
@@ -18,15 +19,25 @@ struct SidebarView: View {
     var body: some View {
         ZStack {
             SidebarBackdrop()
-            List {
-                ForEach(appState.filteredFiles, id: \.id, content: row)
-                    .onMove { offsets, destination in
-                        guard appState.searchText.isEmpty else { return }
-                        withAnimation {
-                            appState.moveFiles(from: offsets, to: destination)
-                        }
+            List(selection: $section) {
+                Section("Sezioni") {
+                    ForEach(AppSection.allCases) { section in
+                        Label(section.name, systemImage: section.symbolName)
+                            .tag(section)
                     }
-                    .onDelete(perform: appState.remove(atOffsets:))
+                }
+                if section == .merger {
+                    Section("Coda file") {
+                        ForEach(appState.filteredFiles, id: \.id, content: row)
+                            .onMove { offsets, destination in
+                                guard appState.searchText.isEmpty else { return }
+                                withAnimation {
+                                    appState.moveFiles(from: offsets, to: destination)
+                                }
+                            }
+                            .onDelete(perform: appState.remove(atOffsets:))
+                    }
+                }
             }
             .onDrop(
                 of: internalDragTypes,
@@ -51,7 +62,7 @@ struct SidebarView: View {
                 }
             }
         }
-        .navigationTitle("File")
+        .navigationTitle("AudioPro")
         // Drop esterno gestito a livello di container per non interferire con il reordering interno
         .onDrop(of: dropTypes, isTargeted: nil, perform: handleExternalDrop(providers:))
     }
@@ -65,6 +76,9 @@ struct SidebarView: View {
         )
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
+        // Le righe file non partecipano alla selezione di sezione della List:
+        // la selezione del file resta gestita da onTapGesture + appState.
+        .selectionDisabled()
         .contentShape(Rectangle())
         .onTapGesture {
             appState.selectedFile = file
@@ -318,13 +332,13 @@ struct SidebarView_Previews: PreviewProvider {
     @MainActor
     static var previews: some View {
         Group {
-            SidebarView()
+            SidebarView(section: .constant(.merger))
                 .environmentObject(AudioAppState())
 
-            SidebarView()
+            SidebarView(section: .constant(.merger))
                 .environmentObject(singleFileState)
 
-            SidebarView()
+            SidebarView(section: .constant(.merger))
                 .environmentObject(PreviewSamples.appState())
         }
     }
