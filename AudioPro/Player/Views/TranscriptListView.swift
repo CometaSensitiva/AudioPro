@@ -6,6 +6,8 @@ struct TranscriptListView: View, Equatable {
     let canSeek: Bool
     let onSelect: (SubtitleCue) -> Void
 
+    @State private var hoveredCueID: SubtitleCue.ID?
+
     // onSelect è escluso di proposito: viene ricreato a ogni body del parent.
     // Il confronto di cues è O(n) solo quando il resto è uguale, e corto-
     // circuita sui cambi frequenti (activeCueID).
@@ -32,8 +34,10 @@ struct TranscriptListView: View, Equatable {
                     proxy.scrollTo(cueID, anchor: .center)
                 }
             }
+            // La lista è layer contenuto: niente glass, scorre sotto la
+            // toolbar con un edge effect morbido.
+            .scrollEdgeEffectStyle(.soft, for: .top)
         }
-        .liquidGlassSurface()
     }
 
     @ViewBuilder
@@ -63,10 +67,10 @@ struct TranscriptListView: View, Equatable {
         if isActive {
             row
                 .foregroundStyle(.primary)
-                .background {
-                    Color.accentColor.opacity(0.18)
-                        .liquidGlassSurface(cornerRadius: 10)
-                }
+                .background(
+                    Color.accentColor.opacity(0.15),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
                 .overlay(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2, style: .continuous)
                         .fill(Color.accentColor)
@@ -75,6 +79,13 @@ struct TranscriptListView: View, Equatable {
                 }
         } else {
             row
+                .background(
+                    Color.primary.opacity(hoveredCueID == cue.id && canSeek ? 0.06 : 0),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+                .onHover { hovering in
+                    hoveredCueID = hovering ? cue.id : nil
+                }
         }
     }
 }
