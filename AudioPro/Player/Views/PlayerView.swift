@@ -8,6 +8,7 @@ struct PlayerView: View {
     @ObservedObject private var playerController: PlayerController
     @State private var isScrubbing = false
     @State private var scrubValue: TimeInterval = 0
+    @Namespace private var glassNamespace
 
     init(model: PlayerModel) {
         self._model = ObservedObject(wrappedValue: model)
@@ -84,68 +85,93 @@ struct PlayerView: View {
         }
     }
 
+    /// Unico elemento glass della sezione: senza media è una capsula di invito,
+    /// con media diventa la barra di trasporto (morphing via glassEffectID).
     private var playerBar: some View {
-        GlassEffectContainer {
-            VStack(spacing: 8) {
-                HStack(spacing: LiquidGlassDesign.spacing) {
-                    Button {
-                        playerController.togglePlayback()
-                    } label: {
-                        Image(systemName: playerController.isPlaying ? "pause.fill" : "play.fill")
-                            .frame(width: 18)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .disabled(!playerController.hasMedia)
-                    .help(playerController.isPlaying ? "Pausa (Spazio)" : "Riproduci (Spazio)")
-                    .accessibilityLabel(playerController.isPlaying ? "Pausa" : "Riproduci")
-
-                    Text(displayTime.playerDisplayString)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
-
-                    Slider(
-                        value: Binding(
-                            get: { displayTime },
-                            set: { scrubValue = $0 }
-                        ),
-                        in: 0...max(playerController.duration, 1),
-                        onEditingChanged: { editing in
-                            if editing {
-                                scrubValue = playerController.currentTime
-                                isScrubbing = true
-                            } else {
-                                isScrubbing = false
-                                playerController.seek(to: scrubValue)
-                            }
-                        }
+        GlassEffectContainer(spacing: 16) {
+            if playerController.hasMedia {
+                transportControls
+                    .padding(.horizontal, LiquidGlassDesign.padding)
+                    .padding(.vertical, 10)
+                    .glassEffect(
+                        .regular.interactive(),
+                        in: .rect(cornerRadius: LiquidGlassDesign.controlCornerRadius, style: .continuous)
                     )
-                    .disabled(!playerController.hasMedia || playerController.duration <= 0)
-                    .accessibilityLabel("Posizione di riproduzione")
-                    .accessibilityValue("\(displayTime.playerDisplayString) di \(playerController.duration.playerDisplayString)")
-
-                    Text(playerController.duration.playerDisplayString)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
+                    .glassEffectID("playerBar", in: glassNamespace)
+            } else {
+                Button {
+                    model.chooseMedia()
+                } label: {
+                    Label("Apri media", systemImage: "play.rectangle")
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
                 }
-
-                HStack {
-                    Text(playerController.mediaName ?? "Nessun media selezionato")
-                    Spacer()
-                    Text(model.srtFileName.map { "\($0) · \(model.cues.count) segmenti" } ?? "Nessun SRT selezionato")
-                        .monospacedDigit()
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .capsule)
+                .glassEffectID("playerBar", in: glassNamespace)
+                .help("Apri un file audio o video (⌘O)")
             }
-            .padding(.horizontal, LiquidGlassDesign.padding)
-            .padding(.vertical, 10)
-            .liquidGlassControl(cornerRadius: LiquidGlassDesign.controlCornerRadius)
         }
         .padding(.horizontal, LiquidGlassDesign.padding)
         .padding(.bottom, LiquidGlassDesign.spacing)
+        .animation(.smooth(duration: 0.35), value: playerController.hasMedia)
+    }
+
+    private var transportControls: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: LiquidGlassDesign.spacing) {
+                Button {
+                    playerController.togglePlayback()
+                } label: {
+                    Image(systemName: playerController.isPlaying ? "pause.fill" : "play.fill")
+                        .frame(width: 18)
+                }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.circle)
+                .help(playerController.isPlaying ? "Pausa (Spazio)" : "Riproduci (Spazio)")
+                .accessibilityLabel(playerController.isPlaying ? "Pausa" : "Riproduci")
+
+                Text(displayTime.playerDisplayString)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+
+                Slider(
+                    value: Binding(
+                        get: { displayTime },
+                        set: { scrubValue = $0 }
+                    ),
+                    in: 0...max(playerController.duration, 1),
+                    onEditingChanged: { editing in
+                        if editing {
+                            scrubValue = playerController.currentTime
+                            isScrubbing = true
+                        } else {
+                            isScrubbing = false
+                            playerController.seek(to: scrubValue)
+                        }
+                    }
+                )
+                .disabled(playerController.duration <= 0)
+                .accessibilityLabel("Posizione di riproduzione")
+                .accessibilityValue("\(displayTime.playerDisplayString) di \(playerController.duration.playerDisplayString)")
+
+                Text(playerController.duration.playerDisplayString)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            HStack {
+                Text(playerController.mediaName ?? "Nessun media selezionato")
+                Spacer()
+                Text(model.srtFileName.map { "\($0) · \(model.cues.count) segmenti" } ?? "Nessun SRT selezionato")
+                    .monospacedDigit()
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
     }
 
     @ViewBuilder
@@ -171,7 +197,6 @@ struct PlayerView: View {
             Text("Apri un file .srt dalla toolbar o dal menu File per visualizzare i segmenti.")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .liquidGlassSurface()
     }
 
     private var displayTime: TimeInterval {
