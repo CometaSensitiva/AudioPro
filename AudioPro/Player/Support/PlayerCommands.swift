@@ -1,20 +1,8 @@
 import SwiftUI
 
-@main
-struct TranscriptPlayerApp: App {
-    var body: some Scene {
-        WindowGroup {
-            TranscriptPlayerView()
-        }
-        .defaultSize(width: 520, height: 680)
-        .commands {
-            TranscriptPlayerCommands()
-        }
-    }
-}
-
-/// Azioni della finestra attiva, esposte ai menu tramite il focus system.
-struct TranscriptPlayerActions {
+/// Azioni della sezione Player attiva, esposte ai menu tramite il focus system.
+/// Quando il Player non è a fuoco le voci risultano disabilitate (actions == nil).
+struct PlayerActions {
     var isPlaying: Bool
     var hasMedia: Bool
     var togglePlayback: () -> Void
@@ -24,13 +12,13 @@ struct TranscriptPlayerActions {
 }
 
 extension FocusedValues {
-    @Entry var transcriptPlayerActions: TranscriptPlayerActions?
+    @Entry var playerActions: PlayerActions?
 }
 
-/// Menu File e Controlli: le scorciatoie vivono qui (HIG: scopribili dai menu),
+/// Menu File e Riproduzione: le scorciatoie vivono qui (HIG: scopribili dai menu),
 /// non duplicate sui bottoni in finestra.
-struct TranscriptPlayerCommands: Commands {
-    @FocusedValue(\.transcriptPlayerActions) private var actions
+struct PlayerCommands: Commands {
+    @FocusedValue(\.playerActions) private var actions
 
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
@@ -41,7 +29,7 @@ struct TranscriptPlayerCommands: Commands {
                 .keyboardShortcut("o", modifiers: [.command, .shift])
                 .disabled(actions == nil)
         }
-        CommandMenu("Controlli") {
+        CommandMenu("Riproduzione") {
             Button(actions?.isPlaying == true ? "Pausa" : "Riproduci") {
                 actions?.togglePlayback()
             }

@@ -1,4 +1,5 @@
 import XCTest
+@testable import AudioPro
 
 final class SubtitleCueLookupTests: XCTestCase {
     private let cues = [
