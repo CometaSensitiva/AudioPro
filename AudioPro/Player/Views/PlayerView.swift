@@ -42,7 +42,7 @@ struct PlayerView: View {
                 VideoPlayer(player: playerController.player)
                     .aspectRatio(playerController.videoAspectRatio ?? 16 / 9, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: 480)
-                    .clipShape(RoundedRectangle(cornerRadius: LiquidGlassDesign.cornerRadius, style: .continuous))
+                    .clipShape(ConcentricRectangle(corners: .concentric(minimum: .fixed(LiquidGlassDesign.mediaCornerRadius))))
             }
 
             statusArea
