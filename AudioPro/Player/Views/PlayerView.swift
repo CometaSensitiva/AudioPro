@@ -41,12 +41,16 @@ struct PlayerView: View {
             if playerController.hasVideo {
                 VideoPlayer(player: playerController.player)
                     .aspectRatio(playerController.videoAspectRatio ?? 16 / 9, contentMode: .fit)
-                    .frame(maxWidth: .infinity, maxHeight: 480)
+                    // Il limite d'altezza va PRIMA di clip e ombre: così la view
+                    // coincide col video e angoli/ombra cadono sui suoi bordi.
+                    // Il centraggio a larghezza piena va DOPO, o riallarga la view.
+                    .frame(maxHeight: 480)
                     .clipShape(ConcentricRectangle(corners: .concentric(minimum: .fixed(LiquidGlassDesign.mediaCornerRadius))))
                     // "Theatre mode": ombra ambientale larga + ombra di
                     // contatto stretta, per staccare il video dallo sfondo.
                     .shadow(color: .black.opacity(0.22), radius: 28, x: 0, y: 14)
                     .shadow(color: .black.opacity(0.10), radius: 6, x: 0, y: 2)
+                    .frame(maxWidth: .infinity)
                     .padding(.bottom, LiquidGlassDesign.spacing)
             }
 
