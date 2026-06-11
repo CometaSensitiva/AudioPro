@@ -38,3 +38,13 @@ Related concepts: [[SwiftUI]], [[Liquid Glass]], [[HIG]], [[FocusedValues]]
 - View-owned `@StateObject` dies with the view: hoisting player state into a root-owned model is what lets audio survive a section switch.
 
 Related concepts: [[Liquid Glass]], [[SwiftUI]], [[TimelineView]], [[MeshGradient]], [[Xcode project format]], [[FocusedValues]]
+
+## 2026-06-11 — Iterazione 3: transport, ricerca, lezioni sulle API nuove
+
+- `ConcentricRectangle` risolve il raggio contro il *contenitore* (la finestra): per una superficie media che fluttua nel contenuto il raggio collassa al ridimensionamento. È pensata per controlli annidati vicino ai bordi; per i media canvas serve un raggio fisso (`RoundedRectangle` continuous).
+- Velocità di riproduzione nativa: `AVPlayer.defaultRate` sopravvive a `play()` e ai riavvii; `AVPlayerItem.audioTimePitchAlgorithm = .spectral` mantiene il pitch del parlato corretto alle alte velocità.
+- ⌘F come key equivalent *con modificatore* raggiunge il menu indipendentemente dal focus — i tasti nudi (Spazio, frecce) no: vengono consumati dal first responder.
+- Una stima di output è derivabile in forma chiusa solo se il preset è fisso: `MB ≈ bitrate_kbps × durata / 8000` (video HEVC 1500 kbps, audio copy trascurabile).
+- Le build CLI (`xcodebuild` da terminale) su questa macchina aggiungono `com.apple.provenance` a ogni file e il codesign fallisce con "detritus not allowed"; le build dalla GUI di Xcode non hanno il problema.
+
+Related concepts: [[Liquid Glass]], [[AVPlayer]], [[SwiftUI]], [[Key equivalents]], [[Codesigning]]
