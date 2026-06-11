@@ -7,8 +7,11 @@ struct MergerDetailView: View {
     
     var body: some View {
         ZStack {
-            WaveformBackdrop()
-                .ignoresSafeArea(.container, edges: [.top, .leading, .bottom, .trailing])
+            ZStack {
+                AmbientBackdrop()
+                ReactiveWaveform(isActive: appState.processingState.isBusy)
+            }
+            .ignoresSafeArea(.container, edges: [.top, .leading, .bottom, .trailing])
             
             VStack(spacing: 12) {
                 ScrollView {

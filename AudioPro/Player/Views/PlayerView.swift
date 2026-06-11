@@ -21,10 +21,13 @@ struct PlayerView: View {
             .navigationSubtitle(playerController.mediaName ?? "Nessun media")
             .frame(minWidth: 460, minHeight: 540)
             .background {
-                // Le superfici glass sono Material: senza un fondo colorato rendono
-                // grigio. Stesso backdrop del DetailView di AudioPro.
-                WaveformBackdrop()
-                    .ignoresSafeArea()
+                // Il glass ha bisogno di un fondo colorato dietro di sé;
+                // la waveform si muove solo durante la riproduzione.
+                ZStack {
+                    AmbientBackdrop()
+                    ReactiveWaveform(isActive: playerController.isPlaying, intensity: 0.7)
+                }
+                .ignoresSafeArea()
             }
             .focusedSceneValue(\.playerActions, currentActions)
             .onReceive(playerController.$currentTime) { time in
