@@ -10,6 +10,9 @@ All notable changes to this project will be documented in this file.
 - Replaced the always-on animated waveform background with a static `MeshGradient` ambient backdrop plus a state-driven waveform (animates only during playback/export, respects Reduce Motion, ~0% idle CPU).
 - Glass now lives only on the functional layer: morphing player transport bar and floating export status capsule; content uses materials and tint fills.
 - Moved the Space transport shortcut to a window-level key equivalent so it works regardless of sidebar focus.
+- Added a clear button to the Trascrizione section: unloads media and transcript in one gesture (the transport bar morphs back to the invite capsule).
+- The video player now sizes itself on the track's real aspect ratio (rotation-aware) up to 480pt tall, instead of a fixed 260pt strip.
+- Moved search to the top of the sidebar (`SearchFieldPlacement.sidebar`, the documented placement when search filters sidebar content); the inspector toggle is now the trailing-most toolbar item, adjacent to the panel it opens.
 
 ## [1.0.0] - 2026-03-24
 

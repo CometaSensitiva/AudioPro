@@ -14,6 +14,18 @@ final class PlayerModel: ObservableObject {
     @Published var srtFileName: String?
     @Published var srtErrorMessage: String?
 
+    var isEmpty: Bool {
+        !playerController.hasMedia && cues.isEmpty
+    }
+
+    func clearAll() {
+        playerController.unloadMedia()
+        cues = []
+        activeCueID = nil
+        srtFileName = nil
+        srtErrorMessage = nil
+    }
+
     func chooseMedia() {
         Task {
             guard let url = await fileSelectionService.selectMedia() else { return }
