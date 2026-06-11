@@ -5,10 +5,12 @@ import SwiftUI
 struct PlayerActions {
     var isPlaying: Bool
     var hasMedia: Bool
+    var canSearchTranscript: Bool
     var togglePlayback: () -> Void
     var seekBy: (TimeInterval) -> Void
     var openMedia: () -> Void
     var openSRT: () -> Void
+    var startTranscriptSearch: () -> Void
 }
 
 extension FocusedValues {
@@ -29,6 +31,12 @@ struct PlayerCommands: Commands {
                 .keyboardShortcut("o", modifiers: [.command, .shift])
                 .disabled(actions == nil)
         }
+        CommandGroup(after: .textEditing) {
+            Button("Cerca nella trascrizione…") { actions?.startTranscriptSearch() }
+                .keyboardShortcut("f", modifiers: .command)
+                .disabled(actions?.canSearchTranscript != true)
+        }
+
         CommandMenu("Riproduzione") {
             // Lo Spazio è registrato sul bottone play/pausa della barra di
             // trasporto, non qui: registrarlo due volte creerebbe ambiguità.

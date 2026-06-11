@@ -14,6 +14,25 @@ final class PlayerModel: ObservableObject {
     @Published var srtFileName: String?
     @Published var srtErrorMessage: String?
 
+    @Published var isTranscriptSearchVisible = false
+    @Published var transcriptQuery = "" {
+        didSet {
+            if let currentMatchID, matchIDs.contains(currentMatchID) == false {
+                self.currentMatchID = nil
+            }
+        }
+    }
+    @Published private(set) var currentMatchID: SubtitleCue.ID?
+
+    /// Cue il cui testo contiene la query, ignorando maiuscole e accenti.
+    var matchIDs: [SubtitleCue.ID] {
+        let query = transcriptQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query.isEmpty == false else { return [] }
+        return cues
+            .filter { $0.text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+            .map(\.id)
+    }
+
     var isEmpty: Bool {
         !playerController.hasMedia && cues.isEmpty
     }
@@ -24,6 +43,47 @@ final class PlayerModel: ObservableObject {
         activeCueID = nil
         srtFileName = nil
         srtErrorMessage = nil
+        closeTranscriptSearch()
+    }
+
+    func startTranscriptSearch() {
+        guard cues.isEmpty == false else { return }
+        isTranscriptSearchVisible = true
+    }
+
+    func closeTranscriptSearch() {
+        isTranscriptSearchVisible = false
+        transcriptQuery = ""
+        currentMatchID = nil
+    }
+
+    func nextMatch() {
+        advanceMatch(by: 1)
+    }
+
+    func previousMatch() {
+        advanceMatch(by: -1)
+    }
+
+    /// Avanza ciclicamente tra i match e fa seek all'inizio della cue:
+    /// il "fast forward alla parola" richiesto. Lo stato play/pausa resta
+    /// quello corrente.
+    private func advanceMatch(by offset: Int) {
+        let matches = matchIDs
+        guard matches.isEmpty == false else { return }
+
+        let nextIndex: Int
+        if let currentMatchID, let index = matches.firstIndex(of: currentMatchID) {
+            nextIndex = (index + offset + matches.count) % matches.count
+        } else {
+            nextIndex = offset >= 0 ? 0 : matches.count - 1
+        }
+
+        let id = matches[nextIndex]
+        currentMatchID = id
+        if let cue = cues.first(where: { $0.id == id }) {
+            playerController.seek(to: cue.start)
+        }
     }
 
     func chooseMedia() {
@@ -51,6 +111,7 @@ final class PlayerModel: ObservableObject {
 
             let parsedCues = try SRTParser.load(from: url)
             cues = parsedCues
+            currentMatchID = nil
             srtFileName = url.lastPathComponent
             srtErrorMessage = parsedCues.isEmpty
                 ? "Il file SRT non contiene segmenti validi."
@@ -59,6 +120,7 @@ final class PlayerModel: ObservableObject {
         } catch {
             cues = []
             activeCueID = nil
+            currentMatchID = nil
             srtFileName = nil
             srtErrorMessage = "Impossibile leggere il file SRT: \(error.localizedDescription)"
         }

@@ -3,6 +3,8 @@ import SwiftUI
 struct TranscriptListView: View, Equatable {
     let cues: [SubtitleCue]
     let activeCueID: SubtitleCue.ID?
+    let matchIDs: Set<SubtitleCue.ID>
+    let currentMatchID: SubtitleCue.ID?
     let canSeek: Bool
     let onSelect: (SubtitleCue) -> Void
 
@@ -13,6 +15,8 @@ struct TranscriptListView: View, Equatable {
     // circuita sui cambi frequenti (activeCueID).
     static func == (lhs: TranscriptListView, rhs: TranscriptListView) -> Bool {
         lhs.activeCueID == rhs.activeCueID
+            && lhs.currentMatchID == rhs.currentMatchID
+            && lhs.matchIDs == rhs.matchIDs
             && lhs.canSeek == rhs.canSeek
             && lhs.cues == rhs.cues
     }
@@ -32,6 +36,12 @@ struct TranscriptListView: View, Equatable {
                 guard let cueID else { return }
                 withAnimation(.easeInOut(duration: 0.2)) {
                     proxy.scrollTo(cueID, anchor: .center)
+                }
+            }
+            .onChange(of: currentMatchID) { _, matchID in
+                guard let matchID else { return }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    proxy.scrollTo(matchID, anchor: .center)
                 }
             }
             // La lista è layer contenuto: niente glass, scorre sotto la
@@ -64,6 +74,8 @@ struct TranscriptListView: View, Equatable {
         .buttonStyle(.plain)
         .disabled(!canSeek)
 
+        let isCurrentMatch = cue.id == currentMatchID
+
         if isActive {
             row
                 .foregroundStyle(.primary)
@@ -80,12 +92,31 @@ struct TranscriptListView: View, Equatable {
         } else {
             row
                 .background(
-                    Color.primary.opacity(hoveredCueID == cue.id && canSeek ? 0.06 : 0),
+                    rowFill(for: cue, isCurrentMatch: isCurrentMatch),
                     in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                 )
+                .overlay {
+                    if isCurrentMatch {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.yellow.opacity(0.7), lineWidth: 1.5)
+                    }
+                }
                 .onHover { hovering in
                     hoveredCueID = hovering ? cue.id : nil
                 }
         }
+    }
+
+    private func rowFill(for cue: SubtitleCue, isCurrentMatch: Bool) -> Color {
+        if isCurrentMatch {
+            return Color.yellow.opacity(0.28)
+        }
+        if matchIDs.contains(cue.id) {
+            return Color.yellow.opacity(0.14)
+        }
+        if hoveredCueID == cue.id && canSeek {
+            return Color.primary.opacity(0.06)
+        }
+        return .clear
     }
 }
