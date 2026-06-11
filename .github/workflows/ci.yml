@@ -9,7 +9,9 @@ on:
 
 jobs:
   macos-build-and-test:
-    runs-on: macos-latest
+    # macos-latest è ancora macOS 15: il deployment target 26 richiede
+    # l'immagine macos-26 (arm64, GA).
+    runs-on: macos-26
 
     steps:
       - name: Checkout repository
