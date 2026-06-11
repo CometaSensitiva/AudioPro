@@ -128,6 +128,9 @@ struct PlayerView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .buttonBorderShape(.circle)
+                // Equivalente a livello finestra: vince sul first responder
+                // (la List in sidebar consuma Spazio prima dei menu).
+                .keyboardShortcut(.space, modifiers: [])
                 .help(playerController.isPlaying ? "Pausa (Spazio)" : "Riproduci (Spazio)")
                 .accessibilityLabel(playerController.isPlaying ? "Pausa" : "Riproduci")
 
