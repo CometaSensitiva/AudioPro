@@ -14,7 +14,7 @@ enum LiquidGlassDesign {
     /// Superfici media (video, artwork): curva più generosa, da usare come
     /// minimum di ConcentricRectangle così gli angoli restano concentrici
     /// col contenitore quando la forma è vicina ai suoi bordi.
-    static let mediaCornerRadius: CGFloat = 20
+    static let mediaCornerRadius: CGFloat = 24
     static let padding: CGFloat = 16
     static let spacing: CGFloat = 12
 }

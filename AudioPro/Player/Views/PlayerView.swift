@@ -43,6 +43,11 @@ struct PlayerView: View {
                     .aspectRatio(playerController.videoAspectRatio ?? 16 / 9, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: 480)
                     .clipShape(ConcentricRectangle(corners: .concentric(minimum: .fixed(LiquidGlassDesign.mediaCornerRadius))))
+                    // "Theatre mode": ombra ambientale larga + ombra di
+                    // contatto stretta, per staccare il video dallo sfondo.
+                    .shadow(color: .black.opacity(0.22), radius: 28, x: 0, y: 14)
+                    .shadow(color: .black.opacity(0.10), radius: 6, x: 0, y: 2)
+                    .padding(.bottom, LiquidGlassDesign.spacing)
             }
 
             statusArea
