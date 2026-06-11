@@ -19,7 +19,7 @@ struct DetailView: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .background {
                                     Color.clear
-                                        .liquidGlassSurface(shape: .fixed(LiquidGlassDesign.cornerRadius))
+                                        .liquidGlassSurface()
                                 }
                         } else {
                             Text("Seleziona o aggiungi un file per iniziare.")
@@ -29,7 +29,7 @@ struct DetailView: View {
                                 .padding()
                                 .background {
                                     Color.clear
-                                        .liquidGlassSurface(shape: .fixed(LiquidGlassDesign.cornerRadius))
+                                        .liquidGlassSurface()
                                 }
                         }
                     }
@@ -43,7 +43,7 @@ struct DetailView: View {
                 .padding(.vertical, 10)
                 .background {
                     Color.clear
-                        .liquidGlassSurface(shape: .fixed(LiquidGlassDesign.cornerRadius))
+                        .liquidGlassSurface()
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 8)
@@ -156,13 +156,8 @@ struct DetailView: View {
 }
 
 private extension View {
-    @ViewBuilder
     func detailWindowChrome() -> some View {
-        if #available(macOS 15.0, *) {
-            self.toolbar(removing: .title)
-        } else {
-            self
-        }
+        self.toolbar(removing: .title)
     }
 }
 

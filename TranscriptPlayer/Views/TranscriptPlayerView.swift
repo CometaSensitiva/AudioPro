@@ -80,7 +80,7 @@ struct TranscriptPlayerView: View {
     }
 
     private var playerBar: some View {
-        LiquidGlassContainer {
+        GlassEffectContainer {
             VStack(spacing: 8) {
                 HStack(spacing: LiquidGlassDesign.spacing) {
                     Button {
@@ -89,7 +89,7 @@ struct TranscriptPlayerView: View {
                         Image(systemName: playerController.isPlaying ? "pause.fill" : "play.fill")
                             .frame(width: 18)
                     }
-                    .liquidGlassButtonStyle(prominent: true)
+                    .buttonStyle(.glassProminent)
                     .disabled(!playerController.hasMedia)
                     .help(playerController.isPlaying ? "Pausa (Spazio)" : "Riproduci (Spazio)")
                     .accessibilityLabel(playerController.isPlaying ? "Pausa" : "Riproduci")
@@ -137,7 +137,7 @@ struct TranscriptPlayerView: View {
             }
             .padding(.horizontal, LiquidGlassDesign.padding)
             .padding(.vertical, 10)
-            .liquidGlassControl(shape: .fixed(16))
+            .liquidGlassControl(cornerRadius: LiquidGlassDesign.controlCornerRadius)
         }
         .padding(.horizontal, LiquidGlassDesign.padding)
         .padding(.bottom, LiquidGlassDesign.spacing)

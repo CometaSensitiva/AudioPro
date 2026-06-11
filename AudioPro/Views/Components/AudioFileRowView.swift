@@ -40,7 +40,7 @@ struct AudioFileRowView: View {
         .background {
             let shape = RoundedRectangle(cornerRadius: cardRadius, style: .continuous)
             Color.clear
-                .liquidGlassSurface(shape: .fixed(cardRadius))
+                .liquidGlassSurface(cornerRadius: cardRadius)
                 .overlay {
                     shape
                         .fill(isSelected ? Color.accentColor.opacity(0.16) : Color.white.opacity(0.05))
