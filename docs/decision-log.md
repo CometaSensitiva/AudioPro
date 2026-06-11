@@ -149,3 +149,24 @@ The app no longer runs on macOS 14–15 (CHANGELOG 1.0.0 had deliberately lowere
 
 **Status**
 Accepted
+
+## 2026-06-11 — Checkpoint 2.0.0 su main
+
+**Context**
+Il ciclo overhaul (app unificata, Liquid Glass corretto, sfondo ambient) più tre iterazioni di rifinitura (cestino player, video adattivo, search sidebar, stime video, transport avanzato, ricerca ⌘F) è completo e testato su `feature/unified-liquid-glass-ui`, con storia lineare su `main`.
+
+**Options**
+- Continuare ad accumulare feature sul branch.
+- Fast-forward merge su main con tag, e pulizia dei branch contenuti.
+
+**Decision**
+`main` avanza in fast-forward fino alla punta del branch; tag annotato `v2.0.0`; eliminati i branch ormai contenuti (`feature/unified-liquid-glass-ui`, `feature/transcript-player`, `refactor-quality-hardening`); push su origin.
+
+**Reason**
+CHANGELOG e MARKETING_VERSION dicono già 2.0.0; un checkpoint nominato semplifica eventuali rollback e ripulisce la lista branch.
+
+**Trade-off**
+La prima run CI su main col deployment target a macOS 26 va osservata (il runner deve avere Xcode 26).
+
+**Status**
+Accepted

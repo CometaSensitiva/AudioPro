@@ -50,7 +50,7 @@ struct PlayerView: View {
                     // coincide col video e angoli/ombra cadono sui suoi bordi.
                     // Il centraggio a larghezza piena va DOPO, o riallarga la view.
                     .frame(maxHeight: 480)
-                    .clipShape(ConcentricRectangle(corners: .concentric(minimum: .fixed(LiquidGlassDesign.mediaCornerRadius))))
+                    .clipShape(RoundedRectangle(cornerRadius: LiquidGlassDesign.mediaCornerRadius, style: .continuous))
                     // "Theatre mode": ombra ambientale larga + ombra di
                     // contatto stretta, per staccare il video dallo sfondo.
                     .shadow(color: .black.opacity(0.22), radius: 28, x: 0, y: 14)

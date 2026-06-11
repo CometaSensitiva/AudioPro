@@ -11,9 +11,9 @@ import SwiftUI
 enum LiquidGlassDesign {
     static let cornerRadius: CGFloat = 12
     static let controlCornerRadius: CGFloat = 16
-    /// Superfici media (video, artwork): curva più generosa, da usare come
-    /// minimum di ConcentricRectangle così gli angoli restano concentrici
-    /// col contenitore quando la forma è vicina ai suoi bordi.
+    /// Superfici media (video, artwork): curva più generosa e FISSA.
+    /// Niente ConcentricRectangle qui: risolve contro la finestra e
+    /// collassa al ridimensionamento quando la forma fluttua nel contenuto.
     static let mediaCornerRadius: CGFloat = 24
     static let padding: CGFloat = 16
     static let spacing: CGFloat = 12
