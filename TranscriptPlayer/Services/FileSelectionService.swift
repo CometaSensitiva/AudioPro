@@ -32,9 +32,12 @@ final class FileSelectionService: ObservableObject {
         message: String,
         prompt: String
     ) async -> URL? {
-        guard activePanel == nil else {
-            activePanel?.makeKeyAndOrderFront(nil)
-            return nil
+        // L'ultima richiesta vince: un pannello già aperto (es. media) viene
+        // annullato quando l'utente ne chiede un altro (es. SRT), invece di
+        // rifocalizzare quello sbagliato e restituire nil in silenzio.
+        if let activePanel {
+            activePanel.cancel(nil)
+            self.activePanel = nil
         }
 
         let panel = NSOpenPanel()
@@ -50,7 +53,11 @@ final class FileSelectionService: ObservableObject {
         return await withCheckedContinuation { continuation in
             panel.begin { [weak self, weak panel] response in
                 let selectedURL = response == .OK ? panel?.url : nil
-                self?.activePanel = nil
+                // Azzera solo se è ancora il proprio pannello: il completion di
+                // un pannello annullato non deve cancellare quello nuovo.
+                if let self, let panel, self.activePanel === panel {
+                    self.activePanel = nil
+                }
                 continuation.resume(returning: selectedURL)
             }
         }

@@ -22,8 +22,6 @@ enum LiquidGlassShape {
     case fixed(CGFloat)
     /// Raggio pari a metà dell'altezza (es. pulsanti)
     case capsule
-    /// Raggio calcolato concentricamente (raggio genitore - padding)
-    case concentric(parentRadius: CGFloat, padding: CGFloat)
 
     var shape: AnyShape {
         switch self {
@@ -31,9 +29,6 @@ enum LiquidGlassShape {
             return AnyShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         case .capsule:
             return AnyShape(Capsule())
-        case .concentric(let parent, let padding):
-            let childRadius = max(0, parent - padding)
-            return AnyShape(RoundedRectangle(cornerRadius: childRadius, style: .continuous))
         }
     }
 }
@@ -66,8 +61,10 @@ extension View {
     /// Stile bottone Liquid Glass: nativo su macOS 26, custom sotto.
     /// I nativi .glass/.glassProminent sono PrimitiveButtonStyle, quindi il
     /// branch di disponibilità deve vivere in una View extension.
+    /// Nota: la forma è decisa dallo stile (capsule nel fallback, metriche
+    /// native su macOS 26) e volutamente non parametrizzabile.
     @ViewBuilder
-    func liquidGlassButtonStyle(prominent: Bool = false, shape: LiquidGlassShape = .capsule) -> some View {
+    func liquidGlassButtonStyle(prominent: Bool = false) -> some View {
         if #available(macOS 26.0, *) {
             if prominent {
                 self.buttonStyle(.glassProminent)
@@ -75,7 +72,7 @@ extension View {
                 self.buttonStyle(.glass)
             }
         } else {
-            self.buttonStyle(LiquidGlassButtonStyle(shape: shape, isProminent: prominent))
+            self.buttonStyle(LiquidGlassButtonStyle(isProminent: prominent))
         }
     }
 }

@@ -20,9 +20,9 @@ final class PlayerController: ObservableObject {
     private var securityScopedMediaURL: URL?
     private var loadTask: Task<Void, Never>?
     private var loadIdentifier = UUID()
+    private var pendingSeeks = 0
 
     init() {
-        installTimeObserver()
         installTimeControlObserver()
     }
 
@@ -45,6 +45,10 @@ final class PlayerController: ObservableObject {
         if url.startAccessingSecurityScopedResource() {
             securityScopedMediaURL = url
         }
+
+        // L'observer vive col media, non col controller: senza file caricato
+        // non c'è nulla da osservare 4 volte al secondo.
+        installTimeObserver()
 
         let identifier = UUID()
         loadIdentifier = identifier
@@ -110,20 +114,30 @@ final class PlayerController: ObservableObject {
         guard hasMedia else { return }
         let upperBound = duration > 0 ? duration : seconds
         let clamped = min(max(0, seconds), upperBound)
+        // currentTime è aggiornato ottimisticamente qui sotto; finché il seek
+        // asincrono non completa, l'observer periodico riporterebbe il tempo
+        // PRE-seek facendo rimbalzare indietro slider e cue evidenziata.
+        pendingSeeks += 1
         player.seek(
             to: CMTime(seconds: clamped, preferredTimescale: 600),
             toleranceBefore: .zero,
             toleranceAfter: .zero
-        )
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.pendingSeeks = max(0, self.pendingSeeks - 1)
+            }
+        }
         updateCurrentTime(clamped)
     }
 
     private func installTimeObserver() {
+        removeTimeObserverIfNeeded()
         let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) {
             [weak self] time in
             MainActor.assumeIsolated {
-                guard let self, self.hasMedia else { return }
+                guard let self, self.hasMedia, self.pendingSeeks == 0 else { return }
                 let seconds = time.seconds
                 if seconds.isFinite {
                     self.updateCurrentTime(seconds)
@@ -160,12 +174,21 @@ final class PlayerController: ObservableObject {
         }
     }
 
+    private func removeTimeObserverIfNeeded() {
+        if let timeObserver {
+            player.removeTimeObserver(timeObserver)
+            self.timeObserver = nil
+        }
+    }
+
     private func resetMedia() {
         loadTask?.cancel()
         loadTask = nil
         loadIdentifier = UUID()
         pause()
         player.replaceCurrentItem(with: nil)
+        removeTimeObserverIfNeeded()
+        pendingSeeks = 0
         if let playbackEndObserver {
             NotificationCenter.default.removeObserver(playbackEndObserver)
             self.playbackEndObserver = nil

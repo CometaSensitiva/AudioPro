@@ -5,7 +5,6 @@ struct TranscriptPlayerView: View {
     @StateObject private var playerController = PlayerController()
     @StateObject private var fileSelectionService = FileSelectionService()
     @State private var cues: [SubtitleCue] = []
-    @State private var transcriptRevision = UUID()
     @State private var activeCueID: SubtitleCue.ID?
     @State private var srtFileName: String?
     @State private var srtErrorMessage: String?
@@ -45,7 +44,6 @@ struct TranscriptPlayerView: View {
                 emptyTranscript
             } else {
                 TranscriptListView(
-                    transcriptRevision: transcriptRevision,
                     cues: cues,
                     activeCueID: activeCueID,
                     canSeek: playerController.hasMedia
@@ -96,7 +94,7 @@ struct TranscriptPlayerView: View {
                     .help(playerController.isPlaying ? "Pausa (Spazio)" : "Riproduci (Spazio)")
                     .accessibilityLabel(playerController.isPlaying ? "Pausa" : "Riproduci")
 
-                    Text(formatTime(displayTime))
+                    Text(displayTime.playerDisplayString)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
@@ -119,9 +117,9 @@ struct TranscriptPlayerView: View {
                     )
                     .disabled(!playerController.hasMedia || playerController.duration <= 0)
                     .accessibilityLabel("Posizione di riproduzione")
-                    .accessibilityValue("\(formatTime(displayTime)) di \(formatTime(playerController.duration))")
+                    .accessibilityValue("\(displayTime.playerDisplayString) di \(playerController.duration.playerDisplayString)")
 
-                    Text(formatTime(playerController.duration))
+                    Text(playerController.duration.playerDisplayString)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
@@ -175,6 +173,10 @@ struct TranscriptPlayerView: View {
         isScrubbing ? scrubValue : playerController.currentTime
     }
 
+    // Ricreata a ogni body (4×/s in riproduzione, currentTime è @Published su
+    // un ObservableObject: l'invalidazione è a livello di oggetto). Isolare la
+    // pubblicazione richiederebbe @Observable o uno split del controller —
+    // rimandato, vedi decision log. Costo: alloc struct + rivalidazione menu.
     private var currentActions: TranscriptPlayerActions {
         TranscriptPlayerActions(
             isPlaying: playerController.isPlaying,
@@ -211,7 +213,6 @@ struct TranscriptPlayerView: View {
 
             let parsedCues = try SRTParser.load(from: url)
             cues = parsedCues
-            transcriptRevision = UUID()
             srtFileName = url.lastPathComponent
             srtErrorMessage = parsedCues.isEmpty
                 ? "Il file SRT non contiene segmenti validi."
@@ -219,7 +220,6 @@ struct TranscriptPlayerView: View {
             updateActiveCue(at: playerController.currentTime)
         } catch {
             cues = []
-            transcriptRevision = UUID()
             activeCueID = nil
             srtFileName = nil
             srtErrorMessage = "Impossibile leggere il file SRT: \(error.localizedDescription)"
@@ -230,16 +230,5 @@ struct TranscriptPlayerView: View {
         let nextCueID = SubtitleCueLookup.activeCueID(in: cues, at: time)
         guard nextCueID != activeCueID else { return }
         activeCueID = nextCueID
-    }
-
-    private func formatTime(_ seconds: TimeInterval) -> String {
-        let value = max(0, Int(seconds.rounded(.down)))
-        let hours = value / 3_600
-        let minutes = (value % 3_600) / 60
-        let remainingSeconds = value % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
-        }
-        return String(format: "%d:%02d", minutes, remainingSeconds)
     }
 }
