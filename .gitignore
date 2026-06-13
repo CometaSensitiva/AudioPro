@@ -30,3 +30,6 @@ fastlane/test_output/
 
 # Icon drafts and heavy experiment bitmaps
 experiments/*.png
+
+# Personal local ML models copied into the app bundle at build time
+LocalModels/

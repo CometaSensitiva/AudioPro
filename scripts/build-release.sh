@@ -19,10 +19,17 @@ echo "==> Building $SCHEME ($CONFIGURATION)"
   -configuration "$CONFIGURATION" \
   -destination "platform=macOS" \
   -derivedDataPath "$DERIVED_DATA_PATH" \
+  INCLUDE_LOCAL_WHISPER_MODEL=NO \
   build
 
 if [[ ! -d "$APP_PATH" ]]; then
   echo "error: Built app not found at $APP_PATH" >&2
+  exit 1
+fi
+
+WHISPER_MODELS_PATH="$APP_PATH/Contents/Resources/WhisperModels"
+if [[ -e "$WHISPER_MODELS_PATH" ]]; then
+  echo "error: Public release unexpectedly contains WhisperModels" >&2
   exit 1
 fi
 
@@ -55,6 +62,12 @@ rm -f "$ZIP_PATH" "$CHECKSUMS_PATH"
 
 echo "==> Creating release archive $ZIP_NAME"
 /usr/bin/ditto -c -k --keepParent --sequesterRsrc "$APP_PATH" "$ZIP_PATH"
+
+if /usr/bin/unzip -Z1 "$ZIP_PATH" | /usr/bin/grep '/WhisperModels/' >/dev/null; then
+  echo "error: Release archive unexpectedly contains WhisperModels" >&2
+  rm -f "$ZIP_PATH"
+  exit 1
+fi
 
 echo "==> Writing checksums"
 (

@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct SidebarView: View {
     @Binding var section: AppSection
+    @ObservedObject var transcriptionModel: TranscriptionModel
     @EnvironmentObject private var appState: AudioAppState
     @State private var draggingFileID: UUID?
     @State private var activeDropTargetID: UUID?
@@ -22,9 +23,15 @@ struct SidebarView: View {
                 .ignoresSafeArea(.container, edges: [.top, .leading, .bottom])
             List(selection: $section) {
                 Section("Sezioni") {
-                    ForEach(AppSection.allCases) { section in
-                        Label(section.name, systemImage: section.symbolName)
-                            .tag(section)
+                    ForEach(AppSection.allCases) { item in
+                        HStack {
+                            Label(item.name, systemImage: item.symbolName)
+                            Spacer()
+                            if item == .transcription, transcriptionModel.state.isBusy {
+                                transcriptionIndicator
+                            }
+                        }
+                        .tag(item)
                     }
                 }
                 if section == .merger {
@@ -66,6 +73,20 @@ struct SidebarView: View {
         .navigationTitle("AudioPro")
         // Drop esterno gestito a livello di container per non interferire con il reordering interno
         .onDrop(of: dropTypes, isTargeted: nil, perform: handleExternalDrop(providers:))
+    }
+
+    @ViewBuilder
+    private var transcriptionIndicator: some View {
+        if let progress = transcriptionModel.state.progressValue {
+            ProgressView(value: progress)
+                .progressViewStyle(.circular)
+                .controlSize(.small)
+                .help("Trascrizione \(Int(progress * 100))%")
+        } else {
+            ProgressView()
+                .controlSize(.small)
+                .help(transcriptionModel.state.statusMessage ?? "Trascrizione in corso")
+        }
     }
     
     @ViewBuilder
@@ -316,13 +337,29 @@ struct SidebarView_Previews: PreviewProvider {
     @MainActor
     static var previews: some View {
         Group {
-            SidebarView(section: .constant(.merger))
+            SidebarView(
+                section: .constant(.merger),
+                transcriptionModel: TranscriptionModel()
+            )
+                .environmentObject(AudioAppState())
+                .environment(\.locale, Locale(identifier: "it"))
+
+            SidebarView(
+                section: .constant(.merger),
+                transcriptionModel: TranscriptionModel()
+            )
                 .environmentObject(AudioAppState())
 
-            SidebarView(section: .constant(.merger))
+            SidebarView(
+                section: .constant(.merger),
+                transcriptionModel: TranscriptionModel()
+            )
                 .environmentObject(singleFileState)
 
-            SidebarView(section: .constant(.merger))
+            SidebarView(
+                section: .constant(.merger),
+                transcriptionModel: TranscriptionModel()
+            )
                 .environmentObject(PreviewSamples.appState())
         }
     }

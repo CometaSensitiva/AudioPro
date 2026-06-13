@@ -4,6 +4,7 @@ import AppKit
 
 struct MergerDetailView: View {
     @EnvironmentObject private var appState: AudioAppState
+    let onTranscribeOutput: (URL) -> Void
     
     var body: some View {
         ZStack {
@@ -77,9 +78,11 @@ struct MergerDetailView: View {
     @ViewBuilder
     private var exportStatusBar: some View {
         if appState.processingState != .idle {
-            StatusBar(state: appState.processingState) {
-                appState.cancelExport()
-            }
+            StatusBar(
+                state: appState.processingState,
+                onCancel: appState.cancelExport,
+                onTranscribeOutput: transcribeOutputAction
+            )
             .padding(.horizontal, LiquidGlassDesign.padding)
             .padding(.vertical, 10)
             .glassEffect(.regular, in: .capsule)
@@ -96,6 +99,13 @@ struct MergerDetailView: View {
         }
         .labelStyle(.iconOnly)
         .help("Aggiungi file")
+    }
+
+    private var transcribeOutputAction: (() -> Void)? {
+        guard let outputURL = appState.lastCompletedOutputURL else { return nil }
+        return {
+            onTranscribeOutput(outputURL)
+        }
     }
 
     private var exportButton: some View {
@@ -183,7 +193,7 @@ private extension View {
 struct MergerDetailView_Previews: PreviewProvider {
     @MainActor
     static var previews: some View {
-        MergerDetailView()
+        MergerDetailView(onTranscribeOutput: { _ in })
             .environmentObject(PreviewSamples.appState())
     }
 }

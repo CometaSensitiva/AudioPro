@@ -105,7 +105,7 @@ One product to maintain, one design system, natural flow between the two feature
 TranscriptPlayer no longer exists as an independent app; plain-key menu shortcuts had to move to a window-level equivalent because the sidebar List can consume them (Space now lives on the play/pause button).
 
 **Status**
-Accepted
+Superseded (2026-06-12, see "Dedicated transcription and playback sections")
 
 ## 2026-06-11 — Ambient backdrop with state-driven waveform
 
@@ -167,6 +167,116 @@ CHANGELOG e MARKETING_VERSION dicono già 2.0.0; un checkpoint nominato semplifi
 
 **Trade-off**
 La prima run CI su main col deployment target a macOS 26 va osservata (il runner deve avere Xcode 26).
+
+**Status**
+Accepted
+
+## 2026-06-11 — Personal local Whisper model packaged at build time
+
+**Context**
+AudioPro deve diventare una suite di studio: merge delle registrazioni, trascrizione locale, e player con testo sincronizzato. Il modello WhisperKit/Core ML è già presente sul Mac e non deve entrare in Git.
+
+**Options**
+- Richiedere una configurazione manuale del percorso modello.
+- Scaricare il modello automaticamente.
+- Tenere una cartella locale `LocalModels/` accanto al progetto e copiarla nel bundle durante la build personale.
+
+**Decision**
+Usare `~/Library/Application Support/AudioPro/LocalModels/`, fuori dal repository e da iCloud, con `openai_whisper-large-v3-v20240930/` e `whisper-large-v3-tokenizer/`. La build copia i file in `AudioPro.app/Contents/Resources/WhisperModels/` quando presenti; se mancano, la build continua e l'app segnala che il modello non è incluso.
+
+**Reason**
+È la soluzione più diretta per un'app personale: niente configurazione runtime, niente download automatici, modello stabile e nessuna sincronizzazione iCloud di asset pesanti.
+
+**Trade-off**
+La build personale cresce di circa 1,5 GB. Un altro Mac deve ricreare solo la cartella in Application Support; WhisperKit viene risolto dalla dipendenza ufficiale bloccata nel lockfile. Lo user-script sandboxing è disattivato solo sul target AudioPro perché Xcode autorizza come output soltanto percorsi letterali, mentre `rsync` deve creare ricorsivamente il modello e file temporanei; l'App Sandbox a runtime resta attiva.
+
+**Status**
+Accepted
+
+## 2026-06-13 — Official WhisperKit dependency and model-free public releases
+
+**Context**
+Il repository deve compilare da GitHub senza una copia locale non tracciata di WhisperKit, mentre il modello Core ML personale non deve essere pubblicato.
+
+**Options**
+- Vendorizzare sia package sia modello.
+- Mantenere package e modello come dipendenze locali.
+- Bloccare il package ufficiale e rendere opzionale solo il modello personale.
+
+**Decision**
+Usare `argmaxinc/argmax-oss-swift` esattamente alla versione `1.0.0`, tracciare `Package.resolved` e le note di licenza, mantenere il modello in Application Support e controllarne il packaging con `INCLUDE_LOCAL_WHISPER_MODEL`. Le build normali usano `YES`; `build-release.sh` forza `NO` e rifiuta archivi contenenti `WhisperModels`.
+
+**Reason**
+Il codice resta riproducibile e legalmente accompagnato dalle notice, mentre GitHub e le release pubbliche non ricevono il modello da circa 1,5 GB.
+
+**Trade-off**
+La trascrizione non è disponibile nelle release pubbliche finché non verrà progettato un download o import esplicito del modello.
+
+**Status**
+Accepted
+
+## 2026-06-12 — Dedicated transcription and playback sections
+
+**Context**
+Local Whisper processing, output selection, playback, and SRT reading had been placed in the same player model and screen, making progress, cancellation, and the study workflow unclear.
+
+**Options**
+- Keep one combined player/transcription section.
+- Add a transcription panel inside Esportazione.
+- Use three explicit sections coordinated by a root session.
+
+**Decision**
+Use Esportazione → Trascrizione → Riproduzione. `AppSession` owns independent export, transcription, and player models. Handoffs are explicit through “Trascrivi output” and “Apri in Riproduzione”.
+
+**Reason**
+Each section has one primary task, while long-running transcription and playback survive navigation changes.
+
+**Trade-off**
+The app gains a coordinator and a dedicated transcription state machine; v1 intentionally supports only one active transcription and no persistent job history.
+
+**Status**
+Accepted
+
+## 2026-06-13 — Native save flow and selectable transcript output
+
+**Context**
+The folder picker hid the output name under “Show Options”, and Finder date separators caused the fallback names `Trascrizione.srt` and `Trascrizione.txt`.
+
+**Options**
+- Keep the folder picker and custom accessory field.
+- Move name and folder controls into the AudioPro screen.
+- Use a native save panel with a visible prefilled name and keep format selection in AudioPro.
+
+**Decision**
+Use `NSSavePanel`, normalize `/` and `:` to `-`, and offer `SRT + TXT`, `Solo SRT`, and `Solo TXT`. Playback handoff is available only when SRT is generated.
+
+**Reason**
+The flow follows the familiar macOS save interaction, keeps the format choice compact, and makes TXT-only output behavior explicit.
+
+**Trade-off**
+`TranscriptionResult` and the output writer must support optional files and selected-output conflict handling instead of assuming a fixed pair.
+
+**Status**
+Superseded
+
+## 2026-06-13 — Folder authorization before local transcription
+
+**Context**
+`NSSavePanel` authorized only the selected output path. AudioPro writes hidden staged files and can produce both SRT and TXT, so App Sandbox denied sibling files in the destination directory after Whisper had already finished.
+
+**Options**
+- Write directly to one selected file and give up coordinated SRT/TXT staging.
+- Show a separate save panel for every output.
+- Edit the shared base name in AudioPro, then use a native folder panel to authorize the destination directory.
+
+**Decision**
+Use one `NSOpenPanel` to select the destination folder, show the prefilled output name in an accessory view disclosed by default, and probe write access before loading Whisper.
+
+**Reason**
+One folder authorization covers the selected outputs, temporary staging, backup, and rollback. An immediate probe prevents a long transcription from completing before a permission error is discovered.
+
+**Trade-off**
+The panel uses an always-visible accessory field because macOS has no save panel that grants directory-wide access while naming multiple sibling files. The multi-file transaction remains reliable under App Sandbox.
 
 **Status**
 Accepted

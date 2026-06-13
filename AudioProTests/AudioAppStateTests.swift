@@ -219,6 +219,7 @@ final class AudioAppStateTests: XCTestCase {
         XCTAssertEqual(processedFileURLs, [file.url])
         XCTAssertEqual(notifier.notifiedURL, outputURL)
         XCTAssertEqual(state.processingState, .completed)
+        XCTAssertEqual(state.lastCompletedOutputURL, outputURL)
     }
     
     // MARK: - Helpers
