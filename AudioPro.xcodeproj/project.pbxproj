@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		F61AEB202ED5A00000BEDEE9 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = F61AEB222ED5A00000BEDEE9 /* WhisperKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		F61AEB052ED4F00000BEDEE9 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F61AEB202ED5A00000BEDEE9 /* WhisperKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -105,6 +110,7 @@
 			);
 			name = AudioPro;
 			packageProductDependencies = (
+				F61AEB222ED5A00000BEDEE9 /* WhisperKit */,
 			);
 			productName = AudioPro;
 			productReference = F61AEAA12ED4DC6200BEDEE9 /* AudioPro.app */;
@@ -162,6 +168,9 @@
 			);
 			mainGroup = F61AEA982ED4DC6200BEDEE9;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F61AEB212ED5A00000BEDEE9 /* XCRemoteSwiftPackageReference "argmax-oss-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F61AEAA22ED4DC6200BEDEE9 /* Products */;
 			projectDirPath = "";
@@ -536,6 +545,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F61AEB212ED5A00000BEDEE9 /* XCRemoteSwiftPackageReference "argmax-oss-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/argmax-oss-swift.git";
+			requirement = {
+				kind = exactVersion;
+				version = 1.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F61AEB222ED5A00000BEDEE9 /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F61AEB212ED5A00000BEDEE9 /* XCRemoteSwiftPackageReference "argmax-oss-swift" */;
+			productName = WhisperKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F61AEA992ED4DC6200BEDEE9 /* Project object */;
 }

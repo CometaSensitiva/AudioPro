@@ -21,8 +21,6 @@ dist/
 # Swift Package Manager
 .build/
 .swiftpm/
-Packages/
-Package.resolved
 
 # Fastlane
 fastlane/report.xml
