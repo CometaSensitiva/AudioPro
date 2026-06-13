@@ -1,4 +1,3 @@
-import AVKit
 import SwiftUI
 
 struct PlayerView: View {
@@ -44,7 +43,7 @@ struct PlayerView: View {
             }
 
             if playerController.hasVideo {
-                VideoPlayer(player: playerController.player)
+                PlayerVideoView(player: playerController.player)
                     .aspectRatio(playerController.videoAspectRatio ?? 16 / 9, contentMode: .fit)
                     // Il limite d'altezza va PRIMA di clip e ombre: così la view
                     // coincide col video e angoli/ombra cadono sui suoi bordi.
@@ -312,8 +311,7 @@ struct PlayerView: View {
 
     @ViewBuilder
     private var statusArea: some View {
-        if let message = playerController.errorMessage
-            ?? model.srtErrorMessage {
+        if let message = playerController.errorMessage ?? model.srtErrorMessage {
             Label(message, systemImage: "exclamationmark.triangle.fill")
                 .font(.caption)
                 .foregroundStyle(.red)
@@ -330,7 +328,7 @@ struct PlayerView: View {
         ContentUnavailableView {
             Label("Nessuna trascrizione", systemImage: "captions.bubble")
         } description: {
-            Text("Apri un file .srt dalla toolbar o dal menu File per visualizzare i segmenti.")
+            Text("Apri un file .srt per visualizzare i segmenti sincronizzati.")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
