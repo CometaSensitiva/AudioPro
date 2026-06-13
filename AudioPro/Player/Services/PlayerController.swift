@@ -12,6 +12,7 @@ final class PlayerController: ObservableObject {
     /// il VideoPlayer sul formato reale invece che su un'altezza fissa.
     @Published private(set) var videoAspectRatio: CGFloat?
     @Published private(set) var hasMedia = false
+    @Published private(set) var mediaURL: URL?
     @Published private(set) var mediaName: String?
     @Published private(set) var errorMessage: String?
     @Published private(set) var playbackRate: Float = 1.0
@@ -46,6 +47,7 @@ final class PlayerController: ObservableObject {
     func loadMedia(from url: URL) {
         resetMedia()
         errorMessage = nil
+        mediaURL = url
         mediaName = url.lastPathComponent
 
         if url.startAccessingSecurityScopedResource() {
@@ -163,9 +165,9 @@ final class PlayerController: ObservableObject {
             toleranceBefore: .zero,
             toleranceAfter: .zero
         ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                self.pendingSeeks = max(0, self.pendingSeeks - 1)
+            guard let controller = self else { return }
+            Task { @MainActor [controller] in
+                controller.pendingSeeks = max(0, controller.pendingSeeks - 1)
             }
         }
         updateCurrentTime(clamped)
@@ -239,12 +241,13 @@ final class PlayerController: ObservableObject {
         hasVideo = false
         videoAspectRatio = nil
         hasMedia = false
+        mediaURL = nil
         mediaName = nil
         playbackRate = 1.0
         player.defaultRate = 1.0
     }
 
-    private func updateCurrentTime(_ seconds: TimeInterval) {
+    func updateCurrentTime(_ seconds: TimeInterval) {
         let normalized = max(0, seconds)
         guard abs(currentTime - normalized) > 0.001 else { return }
         currentTime = normalized

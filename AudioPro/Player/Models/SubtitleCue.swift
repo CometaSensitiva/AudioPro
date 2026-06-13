@@ -1,13 +1,13 @@
 import Foundation
 
-struct SubtitleCue: Identifiable, Equatable, Sendable {
+nonisolated struct SubtitleCue: Identifiable, Equatable, Sendable {
     let id: Int
     let start: TimeInterval
     let end: TimeInterval
     let text: String
 }
 
-enum SubtitleCueLookup {
+nonisolated enum SubtitleCueLookup {
     static func activeCueID(
         in cues: [SubtitleCue],
         at time: TimeInterval

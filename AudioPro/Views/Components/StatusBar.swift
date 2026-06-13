@@ -3,6 +3,7 @@ import SwiftUI
 struct StatusBar: View {
     let state: ProcessingState
     var onCancel: () -> Void
+    var onTranscribeOutput: (() -> Void)? = nil
     
     var body: some View {
         HStack(spacing: 12) {
@@ -21,6 +22,10 @@ struct StatusBar: View {
             case .completed:
                 Label("Esportazione completata", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
+                if let onTranscribeOutput {
+                    Button("Trascrivi output", action: onTranscribeOutput)
+                        .buttonStyle(.borderedProminent)
+                }
             case .failed(let message):
                 Label(message, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)

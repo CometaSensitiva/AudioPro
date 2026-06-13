@@ -1,33 +1,60 @@
 import SwiftUI
 
-/// Vista principale: split view con le sezioni dell'app in sidebar
-/// (Esportazione, Trascrizione) e dettaglio per sezione, stile Landmarks.
+/// Vista principale: split view con Esportazione, Trascrizione e Riproduzione.
 struct ContentView: View {
-    @StateObject private var appState = AudioAppState()
-    @StateObject private var playerModel = PlayerModel()
-    @State private var section: AppSection = .merger
+    @ObservedObject private var session: AppSession
+    @ObservedObject private var appState: AudioAppState
+
+    init(session: AppSession) {
+        self._session = ObservedObject(wrappedValue: session)
+        self._appState = ObservedObject(wrappedValue: session.appState)
+    }
 
     var body: some View {
+        navigation
+            .exportQueueSearchable(
+                isActive: session.section == .merger,
+                text: $appState.searchText
+            )
+            .environmentObject(appState)
+    }
+
+    private var navigation: some View {
         NavigationSplitView {
-            SidebarView(section: $section)
+            SidebarView(
+                section: $session.section,
+                transcriptionModel: session.transcriptionModel
+            )
         } detail: {
-            switch section {
+            switch session.section {
             case .merger:
-                MergerDetailView()
+                MergerDetailView(onTranscribeOutput: session.transcribeExportedFile)
+            case .transcription:
+                TranscriptionView(
+                    model: session.transcriptionModel,
+                    onOpenInPlayback: session.openInPlayback
+                )
             case .player:
-                PlayerView(model: playerModel)
+                PlayerView(model: session.playerModel)
             }
         }
-        // Placement .sidebar: la ricerca filtra la Coda file, che vive in
-        // sidebar (caso documentato di SearchFieldPlacement.sidebar); così
-        // l'inspector toggle resta l'unico elemento trailing della toolbar.
-        .searchable(text: $appState.searchText, placement: .sidebar, prompt: "Cerca nella coda file")
-        .environmentObject(appState)
     }
 }
 
 struct ContentView_Previews: PreviewProvider {
+    @MainActor
     static var previews: some View {
-        ContentView()
+        ContentView(session: AppSession())
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func exportQueueSearchable(isActive: Bool, text: Binding<String>) -> some View {
+        if isActive {
+            searchable(text: text, placement: .sidebar, prompt: "Cerca nella coda file")
+        } else {
+            self
+        }
     }
 }

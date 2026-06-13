@@ -18,6 +18,7 @@ final class AudioAppState: ObservableObject {
     @Published var searchText: String = ""
     @Published var isInspectorPresented: Bool = false
     @Published var processingState: ProcessingState = .idle
+    @Published private(set) var lastCompletedOutputURL: URL?
     @Published var compression: CompressionSettings = .medium {
         didSet {
             if oldValue != compression {
@@ -172,6 +173,7 @@ final class AudioAppState: ObservableObject {
             return
         }
         
+        lastCompletedOutputURL = nil
         processingState = .running(progress: 0)
         let fileURLs = audioFiles.map(\.url)
         let processor = self.processor
@@ -189,6 +191,7 @@ final class AudioAppState: ObservableObject {
             
             switch result {
             case .success:
+                lastCompletedOutputURL = outputURL
                 processingState = .completed
                 notifier.notifyExportFinished(outputURL: outputURL)
             case .failure(let error):
@@ -220,6 +223,7 @@ final class AudioAppState: ObservableObject {
     private func markReadyForNextExport() {
         normalizeExportModeIfNeeded()
         if case .running = processingState { return }
+        lastCompletedOutputURL = nil
         if processingState != .idle {
             processingState = .idle
         }

@@ -8,6 +8,9 @@ import UserNotifications
 
 @main
 struct AudioProApp: App {
+    @NSApplicationDelegateAdaptor(AudioProAppDelegate.self) private var appDelegate
+    @StateObject private var session = AppSession()
+
     init() {
         // Richiedi permessi per le notifiche all'avvio
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
@@ -20,7 +23,10 @@ struct AudioProApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(session: session)
+                .task {
+                    appDelegate.transcriptionModel = session.transcriptionModel
+                }
         }
         .windowStyle(.hiddenTitleBar)
         // Sidebar (~220) + dettaglio + inspector opzionale (360)

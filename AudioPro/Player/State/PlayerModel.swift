@@ -1,13 +1,12 @@
 import Combine
 import Foundation
 
-/// Stato della sezione Player, posseduto dalla root (ContentView): sopravvive
-/// al cambio di sezione, così la riproduzione continua mentre si lavora
-/// nella sezione Esportazione.
+/// Stato della sezione Player, posseduto da AppSession: sopravvive ai cambi
+/// di sezione e sincronizza i sottotitoli senza pubblicare stato dalle view.
 @MainActor
 final class PlayerModel: ObservableObject {
-    let playerController = PlayerController()
-    let fileSelectionService = FileSelectionService()
+    let playerController: PlayerController
+    let fileSelectionService: FileSelectionService
 
     @Published var cues: [SubtitleCue] = []
     @Published var activeCueID: SubtitleCue.ID?
@@ -23,6 +22,37 @@ final class PlayerModel: ObservableObject {
         }
     }
     @Published private(set) var currentMatchID: SubtitleCue.ID?
+    private var currentTimeCancellable: AnyCancellable?
+
+    convenience init() {
+        self.init(
+            playerController: PlayerController(),
+            fileSelectionService: FileSelectionService()
+        )
+    }
+
+    convenience init(playerController: PlayerController) {
+        self.init(
+            playerController: playerController,
+            fileSelectionService: FileSelectionService()
+        )
+    }
+
+    init(
+        playerController: PlayerController,
+        fileSelectionService: FileSelectionService
+    ) {
+        self.playerController = playerController
+        self.fileSelectionService = fileSelectionService
+        // Il tempo e la cue attiva cambiano nello stesso layer di stato.
+        // Farlo da PlayerView.onReceive causava una pubblicazione durante
+        // l'aggiornamento SwiftUI e il relativo runtime warning.
+        currentTimeCancellable = playerController.$currentTime
+            .removeDuplicates()
+            .sink { [weak self] time in
+                self?.updateActiveCue(at: time)
+            }
+    }
 
     /// Cue il cui testo contiene la query, ignorando maiuscole e accenti.
     var matchIDs: [SubtitleCue.ID] {
@@ -124,6 +154,18 @@ final class PlayerModel: ObservableObject {
             srtFileName = nil
             srtErrorMessage = "Impossibile leggere il file SRT: \(error.localizedDescription)"
         }
+    }
+
+    func loadTranscriptionResult(_ result: TranscriptionResult) {
+        guard let srtURL = result.srtURL else { return }
+        playerController.loadMedia(from: result.mediaURL)
+        cues = result.cues
+        activeCueID = nil
+        currentMatchID = nil
+        srtFileName = srtURL.lastPathComponent
+        srtErrorMessage = nil
+        closeTranscriptSearch()
+        updateActiveCue(at: 0)
     }
 
     func updateActiveCue(at time: TimeInterval) {

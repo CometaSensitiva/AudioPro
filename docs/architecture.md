@@ -1,13 +1,15 @@
 # AudioPro Architecture
 
-The Xcode project contains a single macOS application with two sidebar sections: Esportazione (the ffmpeg-based export pipeline) and Trascrizione (AVFoundation playback with synchronized SRT transcript). The player layer under `AudioPro/Player/` has no dependency on the processing layer and does not execute ffmpeg.
+The Xcode project contains one macOS application with three sidebar sections: Esportazione, Trascrizione, and Riproduzione. `AppSession` owns the three root models and coordinates explicit handoffs without coupling the ffmpeg, WhisperKit, and AVPlayer layers.
 
 ```mermaid
 flowchart TD
     CV["ContentView (NavigationSplitView)"] --> Sidebar["Sections + file queue"]
     CV --> Merger["MergerDetailView"]
+    CV --> Transcription["TranscriptionView"]
     CV --> Player["PlayerView"]
     Merger --> State["AudioAppState → ExportPreview → AudioProcessor"]
+    Transcription --> TM["TranscriptionModel → WhisperTranscriptionEngine"]
     Player --> PM["PlayerModel → PlayerController/SRTParser"]
     AudioPro["AudioPro target"] --> AudioTests["AudioProTests (incl. parser logic tests)"]
 ```
@@ -235,15 +237,44 @@ flowchart LR
 - CI validates build and tests only; it does not publish end-user artifacts.
 - Without Apple Developer notarization, end users must use the standard Gatekeeper override flow on first launch.
 
-## Trascrizione section (Player layer)
+## Trascrizione section (Whisper layer)
 
-The Trascrizione section (`AudioPro/Player/`) uses AVFoundation and AVKit directly and does not execute ffmpeg. `PlayerModel` is owned by `ContentView`, so playback and the loaded transcript survive switching to the Esportazione section.
+`TranscriptionModel` owns one active job and survives sidebar changes through `AppSession`. It validates the bundled model, shows the normalized output name in the native destination panel, requests destination-folder access, receives real WhisperKit progress, and publishes a `TranscriptionResult`.
+
+```mermaid
+flowchart LR
+    Source["User-selected media"] --> Folder["Destination folder panel"]
+    Folder --> Scope["Folder security scope"]
+    Scope --> Probe["Immediate write probe"]
+    Probe --> Engine["WhisperTranscriptionEngine"]
+    Model["Bundled Core ML + tokenizer"] --> Engine
+    Engine --> Progress["Real Progress.fractionCompleted"]
+    Engine --> Formatter["Subtitle cues + SRT/TXT formatter"]
+    Formatter --> Stage["Selected hidden staged files"]
+    Stage --> Commit["Replace selected outputs or roll back"]
+    Commit --> Result["TranscriptionResult"]
+    Result --> Player["Open in Riproduzione"]
+```
+
+- Cancellation combines `Task.cancel()`, WhisperKit's callback stop signal, and model unloading.
+- The user selects `SRT + TXT`, `Solo SRT`, or `Solo TXT`; playback handoff requires a generated SRT.
+- `/` and Finder's internal `:` date separators are normalized to `-` in the prefilled output name.
+- The folder write probe runs before model loading, so an App Sandbox denial cannot waste a completed transcription.
+- Partial output is never published: selected files are staged and committed as one recoverable transaction.
+- Existing selected files remain untouched until transcription succeeds; unselected sibling files are not modified.
+- Quitting during a job offers “Continua trascrizione” or “Interrompi ed esci”; termination waits for cleanup.
+
+## Riproduzione section (Player layer)
+
+The Riproduzione section (`AudioPro/Player/`) uses AVFoundation with a native AppKit `AVPlayerView` wrapped by `NSViewRepresentable` and does not execute ffmpeg or WhisperKit. The wrapper shares the same `AVPlayer` owned by `PlayerController`, enables native inline controls and full screen, and keeps AudioPro's lower transport bar available. `PlayerModel` is owned by `AppSession`, so playback and the loaded transcript survive section switches.
 
 ```mermaid
 flowchart LR
     MediaPicker["Media fileImporter"] --> Scope["Long-lived security scope"]
     Scope --> Controller["PlayerController"]
     Controller --> AVPlayer["AVPlayer"]
+    AVPlayer --> NativeView["AVPlayerView native controls"]
+    AVPlayer --> AudioProBar["AudioPro transport bar"]
     SRTPicker["SRT fileImporter"] --> Parser["SRTParser"]
     Parser --> Cues["SubtitleCue array"]
     AVPlayer --> Time["Current time every 0.25 s"]

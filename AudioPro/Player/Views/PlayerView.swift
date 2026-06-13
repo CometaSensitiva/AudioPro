@@ -31,9 +31,6 @@ struct PlayerView: View {
                 .ignoresSafeArea()
             }
             .focusedSceneValue(\.playerActions, currentActions)
-            .onReceive(playerController.$currentTime) { time in
-                model.updateActiveCue(at: time)
-            }
     }
 
     private var content: some View {
