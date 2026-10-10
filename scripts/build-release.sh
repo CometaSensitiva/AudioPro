@@ -2,87 +2,72 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-PROJECT_PATH="$ROOT_DIR/AudioPro.xcodeproj"
-SCHEME="AudioPro"
-CONFIGURATION="Release"
-DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-/tmp/AudioPro-release-build}"
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/.derivedData/release}"
 OUTPUT_DIR="${OUTPUT_DIR:-$ROOT_DIR/dist}"
-APP_PATH="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/AudioPro.app"
-HELPERS_DIR="$APP_PATH/Contents/Helpers"
-ARM64_HELPER="$HELPERS_DIR/ffmpeg-binary-arm64"
-X86_64_HELPER="$HELPERS_DIR/ffmpeg-binary-x86_64"
+APP_PATH="$DERIVED_DATA_PATH/Build/Products/Release/AudioPro.app"
 
-echo "==> Building $SCHEME ($CONFIGURATION)"
-/usr/bin/xcodebuild \
-  -project "$PROJECT_PATH" \
-  -scheme "$SCHEME" \
-  -configuration "$CONFIGURATION" \
-  -destination "platform=macOS" \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  INCLUDE_LOCAL_WHISPER_MODEL=NO \
-  build
-
-if [[ ! -d "$APP_PATH" ]]; then
-  echo "error: Built app not found at $APP_PATH" >&2
-  exit 1
-fi
-
-WHISPER_MODELS_PATH="$APP_PATH/Contents/Resources/WhisperModels"
-if [[ -e "$WHISPER_MODELS_PATH" ]]; then
-  echo "error: Public release unexpectedly contains WhisperModels" >&2
-  exit 1
-fi
-
-echo "==> Verifying packaged helpers"
-for helper in "$ARM64_HELPER" "$X86_64_HELPER"; do
-  if [[ ! -f "$helper" ]]; then
-    echo "error: Missing packaged helper $helper" >&2
+build_arguments=(
+  -project "$ROOT_DIR/AudioPro.xcodeproj"
+  -scheme AudioPro
+  -configuration Release
+  -destination 'generic/platform=macOS'
+  -derivedDataPath "$DERIVED_DATA_PATH"
+  'ARCHS=arm64 x86_64'
+  ONLY_ACTIVE_ARCH=NO
+  INCLUDE_LOCAL_WHISPER_MODEL=NO
+  CODE_SIGNING_ALLOWED=NO
+  CODE_SIGNING_REQUIRED=NO
+)
+if [[ -n "${RELEASE_VERSION:-}" ]]; then
+  if [[ ! "$RELEASE_VERSION" =~ '^[0-9]+\.[0-9]+\.[0-9]+$' ]]; then
+    print -u2 'error: RELEASE_VERSION must have the form 2.1.0'
     exit 1
   fi
+  build_arguments+=("MARKETING_VERSION=$RELEASE_VERSION")
+fi
 
-  if [[ ! -x "$helper" ]]; then
-    echo "error: Helper is not executable: $helper" >&2
-    exit 1
-  fi
+/usr/bin/xcodebuild "${build_arguments[@]}" build
+[[ -d "$APP_PATH" ]] || { print -u2 "error: Missing app: $APP_PATH"; exit 1; }
+[[ ! -e "$APP_PATH/Contents/Resources/WhisperModels" ]] || {
+  print -u2 'error: Public releases must not contain Whisper model weights'
+  exit 1
+}
 
-  /usr/bin/codesign --verify --strict --verbose=2 "$helper"
+for architecture in arm64 x86_64; do
+  /usr/bin/lipo "$APP_PATH/Contents/MacOS/AudioPro" -verify_arch "$architecture"
 done
 
-echo "==> Verifying app signature"
-/usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+# A Personal Team cannot issue a Developer ID certificate. Ad-hoc signatures
+# seal the app and its sandboxed helpers; first launch still needs Open Anyway.
+while IFS= read -r code_path; do
+  /usr/bin/codesign --force --sign - --timestamp=none "$code_path"
+done < <(/usr/bin/find "$APP_PATH/Contents" -depth \( -name '*.framework' -o -name '*.dylib' \))
 
-VERSION="$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist")"
-BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Contents/Info.plist")"
-ZIP_NAME="AudioPro-${VERSION}-macOS.zip"
-ZIP_PATH="$OUTPUT_DIR/$ZIP_NAME"
-CHECKSUMS_PATH="$OUTPUT_DIR/SHA256SUMS.txt"
+for architecture in arm64 x86_64; do
+  helper="$APP_PATH/Contents/Helpers/ffmpeg-binary-$architecture"
+  [[ -x "$helper" ]] || { print -u2 "error: Missing executable helper: $helper"; exit 1; }
+  /usr/bin/lipo "$helper" -verify_arch "$architecture"
+  /usr/bin/codesign --force --sign - --timestamp=none \
+    --entitlements "$ROOT_DIR/AudioPro/FFmpegHelper.entitlements" \
+    --identifier "com.michelemazza.AudioPro.ffmpeg-binary-$architecture" "$helper"
+  /usr/bin/codesign --verify --strict "$helper"
+done
+/usr/bin/codesign --force --sign - --timestamp=none \
+  --entitlements "$ROOT_DIR/AudioPro/AudioPro.entitlements" "$APP_PATH"
+/usr/bin/codesign --verify --deep --strict "$APP_PATH"
 
+version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist")"
+archive_name="AudioPro-$version-macOS.zip"
 mkdir -p "$OUTPUT_DIR"
-rm -f "$ZIP_PATH" "$CHECKSUMS_PATH"
-
-echo "==> Creating release archive $ZIP_NAME"
-/usr/bin/ditto -c -k --keepParent --sequesterRsrc "$APP_PATH" "$ZIP_PATH"
-
-if /usr/bin/unzip -Z1 "$ZIP_PATH" | /usr/bin/grep '/WhisperModels/' >/dev/null; then
-  echo "error: Release archive unexpectedly contains WhisperModels" >&2
-  rm -f "$ZIP_PATH"
+/usr/bin/ditto -c -k --keepParent "$APP_PATH" "$OUTPUT_DIR/$archive_name"
+if /usr/bin/unzip -Z1 "$OUTPUT_DIR/$archive_name" | /usr/bin/grep -q '/WhisperModels/'; then
+  print -u2 'error: Release archive unexpectedly contains Whisper model weights'
   exit 1
 fi
-
-echo "==> Writing checksums"
 (
   cd "$OUTPUT_DIR"
-  /usr/bin/shasum -a 256 "$ZIP_NAME" > "$CHECKSUMS_PATH"
+  /usr/bin/shasum -a 256 "$archive_name" > SHA256SUMS.txt
 )
-
-echo
-echo "Release ready"
-echo "Version      : $VERSION ($BUILD_NUMBER)"
-echo "App          : $APP_PATH"
-echo "Archive      : $ZIP_PATH"
-echo "Checksums    : $CHECKSUMS_PATH"
-echo
-echo "Next steps:"
-echo "1. Smoke-test the built app locally."
-echo "2. Upload the ZIP and SHA256SUMS.txt to a GitHub Release."
-echo "3. In release notes, remind users to open the app via right-click > Open on first launch."
+print "App: $APP_PATH"
+print "Archive: $OUTPUT_DIR/$archive_name"
+print "Checksums: $OUTPUT_DIR/SHA256SUMS.txt"

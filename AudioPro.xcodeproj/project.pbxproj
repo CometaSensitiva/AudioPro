@@ -161,10 +161,10 @@
 				};
 			};
 			buildConfigurationList = F61AEA9C2ED4DC6200BEDEE9 /* Build configuration list for PBXProject "AudioPro" */;
-			developmentRegion = en;
+			developmentRegion = it;
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				en,
+				it,
 				Base,
 			);
 			mainGroup = F61AEA982ED4DC6200BEDEE9;
@@ -422,14 +422,14 @@
 					"ffmpeg-binary-arm64",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
+				INCLUDE_LOCAL_WHISPER_MODEL = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INCLUDE_LOCAL_WHISPER_MODEL = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.0;
+				MARKETING_VERSION = 2.1.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",
@@ -471,14 +471,14 @@
 					"ffmpeg-binary-arm64",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
+				INCLUDE_LOCAL_WHISPER_MODEL = YES;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INCLUDE_LOCAL_WHISPER_MODEL = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.0;
+				MARKETING_VERSION = 2.1.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-framework",

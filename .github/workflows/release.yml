@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Run tests
+        run: |
+          xcodebuild test -project AudioPro.xcodeproj -scheme AudioPro \
+            -destination 'platform=macOS' -derivedDataPath .derivedData/release-tests \
+            INCLUDE_LOCAL_WHISPER_MODEL=NO CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+
+      - name: Build universal release archive
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            export RELEASE_VERSION="${RELEASE_TAG#v}"
+          fi
+          ./scripts/build-release.sh
+
+      - name: Save release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: AudioPro-macOS
+          path: |
+            dist/AudioPro-*-macOS.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          notes="docs/releases/${RELEASE_TAG}.md"
+          if [[ -f "$notes" ]]; then
+            gh release create "$RELEASE_TAG" --verify-tag \
+              --title "AudioPro ${RELEASE_TAG#v}" --notes-file "$notes" \
+              dist/AudioPro-*-macOS.zip dist/SHA256SUMS.txt
+          else
+            gh release create "$RELEASE_TAG" --verify-tag \
+              --title "AudioPro ${RELEASE_TAG#v}" --generate-notes \
+              dist/AudioPro-*-macOS.zip dist/SHA256SUMS.txt
+          fi
