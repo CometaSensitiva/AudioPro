@@ -56,6 +56,9 @@ struct MergerDetailView: View {
             detailContent
         }
         .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: isQueueSearchVisible)
+        .mediaDropDestination(isEnabled: appState.canModifyQueue) { files in
+            appState.addFiles(files.map { AudioFile(url: $0.url, securityScopedURL: $0.securityScopedURL) })
+        }
         .sectionBackground(isActive: appState.processingState.isBusy, intensity: 0.32)
         .safeAreaInset(edge: .bottom, spacing: 0) { exportActionBar }
         .navigationTitle("Esportazione")
@@ -251,8 +254,8 @@ struct MergerDetailView: View {
     private var emptyState: some View {
         FeatureEmptyState(
             "Nessun file in coda",
-            systemImage: "waveform",
-            message: "Aggiungi uno o più file audio o video per preparare l’esportazione."
+            systemImage: AppSection.merger.symbolName,
+            message: "Trascina qui le registrazioni da Memo Vocali o dal Finder, oppure aggiungile dal pulsante."
         ) {
             Button("Aggiungi file…") {
                 addFiles()
@@ -346,7 +349,7 @@ struct MergerDetailView: View {
         Button {
             addFiles()
         } label: {
-            Label("Aggiungi file…", systemImage: "rectangle.stack.badge.plus")
+            Label("Aggiungi file…", systemImage: "plus")
         }
         .labelStyle(.iconOnly)
         .help("Aggiungi file audio o video")

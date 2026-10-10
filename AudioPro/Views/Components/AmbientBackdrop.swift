@@ -116,15 +116,11 @@ struct SectionBackground: ViewModifier {
     var isActive: Bool
     var intensity: Double = 1
 
+    // Sfondo di sistema, come nelle app Apple: niente gradiente su misura
+    // né animazioni di fondo. Il modificatore resta come punto unico per
+    // le tre sezioni.
     func body(content: Content) -> some View {
         content
-            .background {
-                ZStack {
-                    AmbientBackdrop()
-                    ReactiveWaveform(isActive: isActive, intensity: intensity)
-                }
-                .ignoresSafeArea()
-            }
     }
 }
 

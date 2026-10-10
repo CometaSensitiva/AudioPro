@@ -21,6 +21,14 @@ struct PlayerView: View {
 
     var body: some View {
         content
+            .mediaDropDestination(includesTranscripts: true) { files in
+                if let media = files.first(where: { $0.isTranscript == false }) {
+                    playerController.loadMedia(from: media.url)
+                }
+                if let transcript = files.first(where: \.isTranscript) {
+                    model.handleSRTImport(transcript.url)
+                }
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) { playerBar }
             .toolbar { toolbarContent }
             .navigationTitle("Riproduzione")
@@ -432,8 +440,8 @@ struct PlayerView: View {
         } else {
             FeatureEmptyState(
                 "Nessun file aperto",
-                systemImage: "play.rectangle",
-                message: "Apri una registrazione audio o video. Puoi aggiungere la trascrizione SRT prima o dopo."
+                systemImage: AppSection.player.symbolName,
+                message: "Trascina qui una registrazione e il suo file SRT, oppure aprili dai pulsanti."
             ) {
                 Button("Apri file…") {
                     model.chooseMedia()

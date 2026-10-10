@@ -18,6 +18,11 @@ struct TranscriptionView: View {
                 sourceTable
             }
         }
+        .mediaDropDestination(isEnabled: model.canAcceptMedia) { files in
+            if let file = files.first(where: { $0.isTranscript == false }) {
+                model.selectMedia(file.url)
+            }
+        }
         .sectionBackground(
             isActive: model.state.activatesWaveform || model.modelDownloadState.isBusy,
             intensity: 0.28
@@ -53,7 +58,7 @@ struct TranscriptionView: View {
                 Button {
                     model.chooseMedia()
                 } label: {
-                    Label("Scegli file…", systemImage: "doc.badge.plus")
+                    Label("Scegli file…", systemImage: "plus")
                 }
                 .labelStyle(.iconOnly)
                 .help("Scegli un file audio o video")
@@ -89,8 +94,8 @@ struct TranscriptionView: View {
     private var emptyState: some View {
         FeatureEmptyState(
             "Nessun file selezionato",
-            systemImage: "waveform.slash",
-            message: "Scegli una registrazione audio o video oppure trascrivi il risultato di un’esportazione."
+            systemImage: AppSection.transcription.symbolName,
+            message: "Trascina qui una registrazione da Memo Vocali o dal Finder, oppure sceglila dal pulsante."
         ) {
             Button("Scegli file…") {
                 model.chooseMedia()

@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 - Restrict FFmpeg inputs to local files and improve cancellation and error reporting.
 - Align the export and transcription queues, settings and progress bars; keep transcript space beside the video player.
 - Fix the layout loop at the start of export and transcription on macOS 26.
+- Drag recordings straight from Voice Memos or Finder onto any section; drop a recording and its SRT together in the player.
+- Use the system window background and native sidebar, distinct section icons and consistent add buttons.
 - Build universal Apple Silicon/Intel ZIP archives and checksums through the GitHub release workflow.
 
 ## [2.0.0] - 2026-06-11

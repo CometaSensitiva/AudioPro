@@ -18,8 +18,8 @@ enum AppSection: String, CaseIterable, Identifiable {
 
     var symbolName: String {
         switch self {
-        case .merger: "waveform.badge.plus"
-        case .transcription: "waveform.and.mic"
+        case .merger: "tray.and.arrow.up"
+        case .transcription: "quote.bubble"
         case .player: "play.rectangle"
         }
     }
