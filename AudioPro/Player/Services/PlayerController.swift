@@ -21,8 +21,11 @@ final class PlayerController: ObservableObject {
 
     let player = AVPlayer()
 
-    private var timeObserver: Any?
-    private var playbackEndObserver: NSObjectProtocol?
+    // Mutated only on MainActor. Deinit runs after exclusive ownership ends;
+    // exposing these two opaque Objective-C tokens lets it balance observers
+    // without pretending the tokens themselves are Sendable.
+    nonisolated(unsafe) private var timeObserver: Any?
+    nonisolated(unsafe) private var playbackEndObserver: NSObjectProtocol?
     private var timeControlCancellable: AnyCancellable?
     private var securityScopedMediaURL: URL?
     private var loadTask: Task<Void, Never>?
@@ -82,12 +85,12 @@ final class PlayerController: ObservableObject {
 
                 var aspectRatio: CGFloat?
                 if let track = tracks.first {
-                    async let naturalSize = track.load(.naturalSize)
-                    async let transform = track.load(.preferredTransform)
+                    let naturalSize = try await track.load(.naturalSize)
+                    let transform = try await track.load(.preferredTransform)
                     // Il transform gestisce i video registrati ruotati, dove
                     // naturalSize è invertita rispetto alla resa a schermo.
-                    let rect = CGRect(origin: .zero, size: try await naturalSize)
-                        .applying(try await transform)
+                    let rect = CGRect(origin: .zero, size: naturalSize)
+                        .applying(transform)
                     if abs(rect.height) > 0 {
                         aspectRatio = abs(rect.width) / abs(rect.height)
                     }
@@ -109,15 +112,17 @@ final class PlayerController: ObservableObject {
                 return
             } catch {
                 guard self.loadIdentifier == identifier else { return }
-                self.errorMessage = error.localizedDescription
-                self.releaseSecurityScope()
-                self.mediaName = nil
+                self.finishFailedLoad(with: error.localizedDescription)
             }
         }
     }
 
     func unloadMedia() {
         resetMedia()
+        errorMessage = nil
+    }
+
+    func dismissError() {
         errorMessage = nil
     }
 
@@ -245,6 +250,14 @@ final class PlayerController: ObservableObject {
         mediaName = nil
         playbackRate = 1.0
         player.defaultRate = 1.0
+    }
+
+    /// Un caricamento fallito deve lasciare il controller nello stesso stato
+    /// di un player vuoto. Il messaggio viene assegnato solo dopo il reset,
+    /// così resta visibile e può essere chiuso esplicitamente dalla UI.
+    private func finishFailedLoad(with message: String) {
+        resetMedia()
+        errorMessage = message
     }
 
     func updateCurrentTime(_ seconds: TimeInterval) {

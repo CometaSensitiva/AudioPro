@@ -23,7 +23,7 @@ final class PlayerVideoNSView: AVPlayerView {
     init(player: AVPlayer) {
         super.init(frame: .zero)
         self.player = player
-        controlsStyle = .inline
+        controlsStyle = .floating
         videoGravity = .resizeAspect
         showsFullScreenToggleButton = true
     }

@@ -45,10 +45,11 @@ enum SRTParser {
                 return nil
             }
 
-            let text = lines
-                .dropFirst(timelineIndex + 1)
-                .joined(separator: "\n")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let text = cleanedCueText(
+                lines
+                    .dropFirst(timelineIndex + 1)
+                    .joined(separator: "\n")
+            )
 
             guard !text.isEmpty else { return nil }
             return ParsedCue(order: order, start: start, end: end, text: text)
@@ -106,6 +107,41 @@ enum SRTParser {
         }
 
         return TimeInterval(hours * 3_600 + minutes * 60) + secondsPart
+    }
+
+    /// I tag più comuni dei file SRT descrivono enfasi o posizione, ma il
+    /// transcript di AudioPro è testo semplice. Li rimuoviamo invece di
+    /// mostrarli letteralmente, preservando righe e contenuto leggibile.
+    private static func cleanedCueText(_ source: String) -> String {
+        var result = source
+            .replacingOccurrences(
+                of: #"\{\\[^}]+\}"#,
+                with: "",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
+                of: #"(?i)</?(?:b|i|u|font|c|v|ruby|rt)(?:\.[^ >]+|\s+[^>]*)?>"#,
+                with: "",
+                options: .regularExpression
+            )
+
+        let entities = [
+            "&nbsp;": " ",
+            "&amp;": "&",
+            "&lt;": "<",
+            "&gt;": ">",
+            "&quot;": "\"",
+            "&#39;": "’"
+        ]
+        for (entity, replacement) in entities {
+            result = result.replacingOccurrences(of: entity, with: replacement)
+        }
+
+        return result
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
