@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0] - 2026-10-10
+
+- Download Whisper Large v3 from the app on first use; public archives contain no model weights.
+- Preserve existing destinations until exports and transcript files finish successfully, and clean up cancelled work.
+- Restrict FFmpeg inputs to local files and improve cancellation and error reporting.
+- Align the export and transcription queues, settings and progress bars; keep transcript space beside the video player.
+- Fix the layout loop at the start of export and transcription on macOS 26.
+- Build universal Apple Silicon/Intel ZIP archives and checksums through the GitHub release workflow.
+
 ## [2.0.0] - 2026-06-11
 
 - **Breaking**: raised the minimum supported OS to `macOS 26` and removed the Material compatibility layer; the design system is native Liquid Glass only.

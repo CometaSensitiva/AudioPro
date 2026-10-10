@@ -280,3 +280,91 @@ The panel uses an always-visible accessory field because macOS has no save panel
 
 **Status**
 Accepted
+
+## 2026-07-05 — Runtime Whisper model download and theater sizing
+
+**Context**
+The transcription model was missing on this Mac, and the previous design required manually recreating `LocalModels` and rebuilding. The player size option `Adatta` was ambiguous because it was not a true adaptive or theater mode.
+
+**Options**
+- Keep the build-time-only local model copy.
+- Let the app download the model into Application Support at runtime.
+- Replace `Adatta` with drag-resize, remove it, or make it an in-window theater mode.
+
+**Decision**
+Use WhisperKit's runtime download into `~/Library/Application Support/AudioPro/ModelCache`, keep bundled and legacy `LocalModels` lookup as fallbacks, add the network client entitlement, and rename `Adatta` to `Teatro` as an in-window large player mode.
+
+**Reason**
+The app can recover from a missing model without a rebuild, while the model still stays out of Git and public release archives. `Teatro` describes the actual behavior and avoids unsafe macOS fullscreen paths.
+
+**Trade-off**
+The app now needs outbound network permission. The first model download depends on Hugging Face availability and can take time; drag-resize remains a later enhancement if fixed size presets feel too rigid.
+
+**Status**
+Accepted
+
+## 2026-07-22 — Capability-bounded and transactional exports
+
+**Context**
+The Whisper download requires outbound network access, which is inherited by the bundled ffmpeg child. Exports also wrote directly to the user-selected path, and cancellation did not wait for the previous process to terminate.
+
+**Options**
+- Remove runtime model download and the network entitlement.
+- Isolate downloads in a new XPC service immediately.
+- Keep the current app target, restrict ffmpeg inputs to the local `file` protocol, and make process/output lifecycle transactional.
+
+**Decision**
+Keep runtime download, pass a `file` protocol whitelist before every ffmpeg input, bind codecs to explicit containers, and run one generation-tagged process at a time. The parent app copies scoped inputs into its container, where ffmpeg reads and writes; after validation, the parent copies the result to a private replacement directory on the destination volume and commits atomically. Cancellation waits for process cleanup and keeps the queue/security scopes alive.
+
+**Reason**
+This removes the immediate network-input and partial-overwrite risks without adding an XPC boundary before its security-scoped bookmark flow is designed and tested.
+
+**Trade-off**
+An XPC downloader remains the stronger future capability boundary. Container input staging plus same-volume commit staging adds copy time and temporary disk use, but does not rely on passing dynamic Powerbox rights to the child process. Updating the vendored ffmpeg binaries remains a separate supply-chain task.
+
+**Status**
+Accepted
+
+## 2026-07-22 — Atomic model availability and fail-closed file replacement
+
+**Context**
+A partial Whisper cache could look complete before tokenizer download finished, stale callbacks could win a cancel/retry race, and transcription replacement treated any existing path as a replaceable file.
+
+**Options**
+- Continue discovering cache folders heuristically.
+- Delete every partial download and restart from zero.
+- Publish availability only through an atomic manifest, retain resumable partial data, and reject non-regular output paths.
+
+**Decision**
+Validate non-empty model and tokenizer artifacts, then atomically register relative paths in a completion manifest. Cache availability in `TranscriptionModel`, tag downloads with a generation ID, and keep `.cancelling` busy until true termination. Replace only regular transcript files; directories, symlinks, and special files fail closed. Reorder the export table with stable file IDs and disable queue mutations during export.
+
+**Reason**
+One explicit commit point makes partial assets invisible, generation checks prevent old jobs from publishing into new state, and filesystem type checks protect user data even if paths change after the picker alert.
+
+**Trade-off**
+Partial model data remains on disk for WhisperKit to resume. External changes to model folders require an explicit availability refresh instead of being discovered on every SwiftUI render.
+
+**Status**
+Accepted
+
+## 2026-07-22 — Shared UI grammar across workflow states
+
+**Context**
+The screenshot audit covered empty, loaded, processing, completed, playback, video, search, and transcript states. Similar actions, progress indicators, inspector widths, and labels had different hierarchy and wording across the three sections.
+
+**Options**
+- Keep each screen's local presentation rules.
+- Replace the existing interface with a new visual system.
+- Extend the current macOS design language with shared state and action primitives.
+
+**Decision**
+Keep the native macOS structure and existing Liquid Glass tokens. Use shared empty/notice/progress/action components, one authoritative bottom action surface per workflow, consistent inspector widths and semantic typography, Italian localization, and context-aware menu commands. Preserve native AVKit video controls alongside AudioPro's study transport bar.
+
+**Reason**
+The same status and action hierarchy now survives transitions between loaded, running, completed, and playback states without changing the product's established visual identity.
+
+**Trade-off**
+Some workflow-specific layout remains necessary, especially for video theater mode and the export table. Shared primitives reduce drift but do not make every screen structurally identical.
+
+**Status**
+Accepted

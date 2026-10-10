@@ -115,3 +115,55 @@ Related concepts: [[AVFoundation]], [[AVKit]], [[AVPlayerView]], [[NSViewReprese
 - A release check should fail closed: finding `WhisperModels` aborts archive creation instead of relying on a manual inspection.
 
 Related concepts: [[Swift Package Manager]], [[Package.resolved]], [[Build settings]], [[Release engineering]]
+
+## 2026-07-05 — Sidebar stability and shared progress affordances
+
+- Applying `.searchable` conditionally to the root `NavigationSplitView` changes sidebar chrome between sections; a toolbar search field scoped to Esportazione avoids changing sidebar geometry in other workflows.
+- AVKit's AppKit `AVPlayerView` can keep native video controls on hover with `.floating`, while the app keeps its own bottom transport bar for study-specific controls.
+- Export and transcription progress should share small primitives: one compact circular badge for sidebar/status rows and one linear progress line for the active task surface.
+
+Related concepts: [[SwiftUI]], [[NavigationSplitView]], [[AVPlayerView]], [[Progress UI]]
+
+## 2026-07-05 — Runtime assets, notifications, and clear player modes
+
+- A sandboxed macOS app needs `com.apple.security.network.client` before a runtime model download can work, even if the Swift networking code is correct.
+- Notification permission should be requested from a workflow manager at a meaningful moment, not from app initialization before the app is fully active.
+- A local ML asset can have a layered lookup strategy: bundled resource first, app-managed runtime cache second, legacy personal folder third.
+- A size control label must describe user-visible behavior: `Teatro` is clearer than `Adatta` when the mode expands the video inside the app window rather than adapting continuously or entering system fullscreen.
+
+Related concepts: [[App Sandbox]], [[UserNotifications]], [[Runtime assets]], [[WhisperKit]], [[UX naming]]
+
+## 2026-07-22 — Generation-safe jobs and transactional boundaries
+
+- A long-running task needs both a generation ID and cancel-and-wait: cancellation alone does not stop late progress or completion from an older job.
+- Sandbox capabilities propagate to child processes. A protocol whitelist narrows ffmpeg immediately, while a separate XPC service would provide the stronger architectural boundary.
+- Codec and container are one contract: AAC/ALAC use M4A, Opus uses OPUS, and stream copy must preserve a compatible source container.
+- User output should be treated as a commit target, not a work file. Staging plus validation keeps the previous destination intact on failure or cancellation.
+- Atomic file replacement requires staging on the destination volume; macOS `itemReplacementDirectory` provides an isolated location suitable for external disks as well as the startup volume.
+- A sandboxed child with `com.apple.security.inherit` receives static rights, not Powerbox extensions granted to the parent after launch. Copy scoped input into the app container before invoking a command-line helper, then let the parent publish the result.
+- A cache becomes available only at its atomic completion marker; model and tokenizer folders found before that point are resumable partial data, not a usable installation.
+- Filesystem replacement must fail closed and recheck path type at commit time. A directory or symlink named `Lezione.srt` is not a replaceable transcript file.
+- Table drag payloads should carry stable IDs rather than row indexes; search and concurrent queue mutations otherwise invalidate positional assumptions.
+- Presentation metadata belongs in the asynchronous file snapshot, not in computed SwiftUI properties that read the filesystem on every render.
+
+Related concepts: [[Swift Concurrency]], [[App Sandbox]], [[Transactional files]], [[State machine]], [[SwiftUI]], [[Security-scoped URLs]]
+
+## 2026-07-22 — Auditing stateful SwiftUI interfaces
+
+- Empty-state screenshots are not enough for a workflow app: loaded, running, cancelling, completed, error, playback, search, and transcript states can each expose a different hierarchy problem.
+- A long operation should have one authoritative progress surface. Repeating the same progress in a content card and bottom bar creates visual competition and ambiguous cancellation ownership.
+- Shared components are most useful for behavior and hierarchy—empty states, notices, responsive action rows, and progress—not for forcing unrelated screens into one layout.
+- Menu commands should follow the focused workflow, refocus search on repeated `⌘F`, and observe only the state they need; observing playback time from unrelated screens causes needless SwiftUI updates.
+- Semantic text styles, middle truncation for filenames, Italian number/date formatting, and explicit accessibility labels are small details that make separate screens feel like one product.
+- Native save panels inherit the app localization only when the project region and runtime locale are configured consistently.
+
+Related concepts: [[SwiftUI]], [[Accessibility]], [[Localization]], [[State machine]], [[Key equivalents]], [[Design systems]]
+
+## 2026-07-29 — Handoff affidabili e scorciatoie contestuali
+
+- Una CTA che passa un file a un altro workflow deve dipendere dalla capacità reale del destinatario (`canAcceptMedia`) e cambiare schermata solo dopo l’accettazione: così non mostra dati vecchi mentre un job è occupato.
+- Quando inspector e barra inferiore possono controllare lo stesso download, lo stato di presentazione decide quale dei due è l’unica superficie autorevole; sollevare quello stato alla shell permette anche di proteggere la larghezza minima della finestra.
+- Spazio e frecce senza modificatori non sono scorciatoie globali sicure neppure nel Player: lista, slider, menu e pulsanti possono usarli legittimamente. Le azioni restano scopribili nel menu Riproduzione, mentre i comandi con modificatore come `⌘F` sono adatti al menu di scena.
+- Un caricamento media fallito deve chiudere task, observer e security scope e azzerare tutto lo stato prima di pubblicare un errore dismissibile.
+
+Related concepts: [[SwiftUI]], [[State machine]], [[FocusedValues]], [[Key equivalents]], [[App Sandbox]]

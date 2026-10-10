@@ -4,7 +4,7 @@ The Xcode project contains one macOS application with three sidebar sections: Es
 
 ```mermaid
 flowchart TD
-    CV["ContentView (NavigationSplitView)"] --> Sidebar["Sections + file queue"]
+    CV["ContentView (NavigationSplitView)"] --> Sidebar["Sections + job progress"]
     CV --> Merger["MergerDetailView"]
     CV --> Transcription["TranscriptionView"]
     CV --> Player["PlayerView"]
@@ -46,6 +46,7 @@ flowchart TD
         Builder["FFmpegCommandBuilder"]
         Verifier["FFmpegBinaryVerifier"]
         Runner["FFmpegProcessRunner"]
+        Transaction["ExportOutputTransaction"]
     end
 
     subgraph Runtime["External runtime"]
@@ -65,6 +66,7 @@ flowchart TD
     Processor --> Builder
     Processor --> Verifier
     Processor --> Runner
+    Processor --> Transaction
     Runner --> Helper
     AudioFile --> Files
 ```
@@ -97,6 +99,7 @@ classDiagram
     class ExportPreview {
         +ExportValidation validation
         +ExportJob? exportJob
+        +ExportOutputFormat? outputFormat
         +ExportMode effectiveExportMode
         +Bool isVideoCompressionEligible
         +String compressionSummary
@@ -130,6 +133,13 @@ classDiagram
         +cancel()
     }
 
+    class ExportOutputTransaction {
+        +URL destinationURL
+        +URL stagingURL
+        +commit()
+        +discard()
+    }
+
     class NotificationManager {
         +notifyExportFinished(outputURL)
         +configure()
@@ -143,6 +153,7 @@ classDiagram
     AudioProcessor --> FFmpegCommandBuilder
     AudioProcessor --> FFmpegBinaryVerifier
     AudioProcessor --> FFmpegProcessRunner
+    AudioProcessor --> ExportOutputTransaction
 ```
 
 ## Export sequence
@@ -157,6 +168,7 @@ sequenceDiagram
     participant FFmpegBinaryVerifier
     participant FFmpegCommandBuilder
     participant FFmpegProcessRunner
+    participant ExportOutputTransaction
     participant ffmpeg
     participant NotificationManager
 
@@ -166,12 +178,15 @@ sequenceDiagram
     ExportPreview-->>AudioAppState: ExportJob + validation
     AudioAppState->>AudioProcessor: process(fileURLs, outputURL, job, totalDuration)
     AudioProcessor->>FFmpegBinaryVerifier: verifyRuntimeBinary(...)
-    AudioProcessor->>FFmpegCommandBuilder: makeArguments(...)
+    AudioProcessor->>ExportOutputTransaction: create private container workspace
+    ExportOutputTransaction->>ExportOutputTransaction: copy scoped inputs into container
+    AudioProcessor->>FFmpegCommandBuilder: makeArguments(container inputs, staging URL)
     AudioProcessor->>FFmpegProcessRunner: run(path, arguments, ...)
     FFmpegProcessRunner->>ffmpeg: Launch Process
     ffmpeg-->>FFmpegProcessRunner: stdout/stderr progress
     FFmpegProcessRunner-->>AudioAppState: progressCallback(progress)
     FFmpegProcessRunner-->>AudioProcessor: success / failure
+    AudioProcessor->>ExportOutputTransaction: copy to same-volume replacement area and commit
     AudioProcessor-->>AudioAppState: Result
     AudioAppState->>NotificationManager: notifyExportFinished(outputURL)
 ```
@@ -184,7 +199,7 @@ stateDiagram-v2
     idle --> running: startExport
     running --> completed: export success
     running --> failed: export failure
-    running --> idle: cancelExport
+    running --> idle: cancel-and-wait completed
     completed --> idle: settings/files change
     failed --> idle: settings/files change
 ```
@@ -193,8 +208,11 @@ stateDiagram-v2
 
 - The app runs with App Sandbox enabled.
 - The main app entitlement grants `com.apple.security.files.user-selected.read-write`.
+- The main app has outbound network access for the explicit Whisper model download.
 - Imported files can be security-scoped; `AudioFile` currently keeps that capability alive for the lifetime of the model object.
-- The bundled `ffmpeg` helper inherits the sandbox and is packaged inside `AudioPro.app/Contents/Helpers/`.
+- The active export retains its `AudioFile` snapshot and freezes queue mutations until cleanup, so input security scopes cannot disappear mid-job.
+- The bundled `ffmpeg` helper inherits only the app's static sandbox rights, not Powerbox extensions granted after launch. The parent app therefore copies scoped inputs into its private container, and ffmpeg reads/writes only there.
+- Every ffmpeg input is additionally constrained with the `file` protocol whitelist, so playlists cannot open HTTP or other network protocols.
 
 ## Export pipeline details
 
@@ -203,10 +221,11 @@ stateDiagram-v2
   - validates the current selection,
   - computes bitrate and size estimates for audio exports,
   - resolves the effective export mode,
+  - binds codec and output container (`m4a`, `opus`, `mp4`, or the source container for single-file stream copy),
   - emits an `ExportJob`.
-- `AudioProcessor` does not decide *what* to export; it executes a precomputed `ExportJob`.
+- `AudioProcessor` does not decide *what* to export; it stages inputs and ffmpeg output inside the app container, then the parent app copies the validated result into a private replacement directory on the destination volume and commits only after success.
 - `FFmpegCommandBuilder` keeps argument generation deterministic and separately testable.
-- `FFmpegProcessRunner` owns `Process`, progress parsing, cancellation, and bounded stderr/stdout retention through `ProcessLogTail`.
+- `FFmpegProcessRunner` owns one generation-tagged `Process`, progress parsing, cancel-and-wait with a bounded TERM-to-KILL escalation, and bounded stderr/stdout retention through `ProcessLogTail`.
 
 ## ffmpeg helper trust model
 
@@ -239,7 +258,7 @@ flowchart LR
 
 ## Trascrizione section (Whisper layer)
 
-`TranscriptionModel` owns one active job and survives sidebar changes through `AppSession`. It validates the bundled model, shows the normalized output name in the native destination panel, requests destination-folder access, receives real WhisperKit progress, and publishes a `TranscriptionResult`.
+`TranscriptionModel` owns one active job and survives sidebar changes through `AppSession`. It resolves Whisper from the app bundle, an atomically registered runtime `ModelCache`, or a `LocalModels` copy available inside its container/bundle. It offers a runtime download when the model is missing, shows the normalized output name in the native destination panel, requests destination-folder access, receives real WhisperKit progress, and publishes a `TranscriptionResult`.
 
 ```mermaid
 flowchart LR
@@ -247,7 +266,14 @@ flowchart LR
     Folder --> Scope["Folder security scope"]
     Scope --> Probe["Immediate write probe"]
     Probe --> Engine["WhisperTranscriptionEngine"]
-    Model["Bundled Core ML + tokenizer"] --> Engine
+    Missing["Model missing"] --> Download["Runtime model download"]
+    Download --> Validate["Validate model + tokenizer"]
+    Validate --> Marker["Atomic completion manifest"]
+    Marker --> Cache["Sandbox ModelCache"]
+    Bundle["Bundled Core ML + tokenizer"] --> Model["Resolved model locations"]
+    Cache --> Model
+    Local["Legacy LocalModels"] --> Model
+    Model --> Engine
     Engine --> Progress["Real Progress.fractionCompleted"]
     Engine --> Formatter["Subtitle cues + SRT/TXT formatter"]
     Formatter --> Stage["Selected hidden staged files"]
@@ -257,16 +283,18 @@ flowchart LR
 ```
 
 - Cancellation combines `Task.cancel()`, WhisperKit's callback stop signal, and model unloading.
+- Model download callbacks carry a generation ID; retry stays disabled through `.cancelling`, and only the current generation can publish progress or completion.
+- A partial cache without the completion manifest is never reported as available; model and tokenizer paths must both validate inside the cache root.
 - The user selects `SRT + TXT`, `Solo SRT`, or `Solo TXT`; playback handoff requires a generated SRT.
 - `/` and Finder's internal `:` date separators are normalized to `-` in the prefilled output name.
 - The folder write probe runs before model loading, so an App Sandbox denial cannot waste a completed transcription.
 - Partial output is never published: selected files are staged and committed as one recoverable transaction.
-- Existing selected files remain untouched until transcription succeeds; unselected sibling files are not modified.
-- Quitting during a job offers “Continua trascrizione” or “Interrompi ed esci”; termination waits for cleanup.
+- Existing selected regular files remain untouched until transcription succeeds; directories, symlinks, and special files are never accepted as replaceable outputs.
+- `AppSession` aggregates export, transcription, and model-download work. Quitting offers to continue or interrupt all active operations, and termination waits for every cleanup path.
 
 ## Riproduzione section (Player layer)
 
-The Riproduzione section (`AudioPro/Player/`) uses AVFoundation with a native AppKit `AVPlayerView` wrapped by `NSViewRepresentable` and does not execute ffmpeg or WhisperKit. The wrapper shares the same `AVPlayer` owned by `PlayerController`, enables native inline controls and full screen, and keeps AudioPro's lower transport bar available. `PlayerModel` is owned by `AppSession`, so playback and the loaded transcript survive section switches.
+The Riproduzione section (`AudioPro/Player/`) uses AVFoundation with a native AppKit `AVPlayerView` wrapped by `NSViewRepresentable` and does not execute ffmpeg or WhisperKit. The wrapper shares the same `AVPlayer` owned by `PlayerController`, enables native floating hover controls, and keeps AudioPro's lower transport bar available. `PlayerModel` is owned by `AppSession`, so playback and the loaded transcript survive section switches.
 
 ```mermaid
 flowchart LR
