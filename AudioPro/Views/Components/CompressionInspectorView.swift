@@ -27,9 +27,17 @@ struct CompressionInspectorView: View {
     var body: some View {
         Form {
             outputModeSection
-            summarySection
+                .disabled(appState.processingState.isBusy)
+            if summaryHasContent {
+                summarySection
+            }
+            if notificationNeedsAttention {
+                notificationSection
+            }
             primarySection
+                .disabled(appState.processingState.isBusy)
             advancedSection
+                .disabled(appState.processingState.isBusy)
 
             if let videoCapabilityNoticeMessage {
                 Section {
@@ -46,13 +54,15 @@ struct CompressionInspectorView: View {
                     Spacer()
                     tracked(.reset) {
                         Button {
+                            guard appState.canModifyQueue else { return }
                             appState.compression = CompressionSettings.medium
                                 .preservingExportMode(appState.compression.exportMode)
                             syncMaxSizeInput()
                         } label: {
-                            Label("Ripristina standard", systemImage: "arrow.counterclockwise")
+                            Label("Ripristina valori predefiniti", systemImage: "arrow.counterclockwise")
                         }
                         .buttonStyle(.bordered)
+                        .disabled(appState.processingState.isBusy)
                     }
                     Spacer()
                 }
@@ -60,11 +70,9 @@ struct CompressionInspectorView: View {
         }
         .controlSize(.small)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .simultaneousGesture(TapGesture().onEnded {
-            dismissMaxSizeFieldFocus()
-        })
         .onAppear {
             syncMaxSizeInput()
+            appState.refreshNotificationPermission()
         }
         .onChange(of: appState.compression.maxOutputSizeMB) { _, _ in
             syncMaxSizeInput()
@@ -74,9 +82,9 @@ struct CompressionInspectorView: View {
     @ViewBuilder
     private var outputModeSection: some View {
         if preview.isVideoCompressionEligible {
-            Section("Output") {
+            Section("Risultato") {
                 tracked(.exportMode) {
-                    Picker("Output", selection: binding(\.exportMode)) {
+                    Picker("Modalità", selection: binding(\.exportMode)) {
                         ForEach(ExportMode.allCases) { mode in
                             Text(mode.rawValue).tag(mode)
                         }
@@ -87,14 +95,14 @@ struct CompressionInspectorView: View {
                 if preview.isVideoModeActive {
                     noticePanel(
                         icon: "video.badge.waveform",
-                        title: "Preset video fisso",
+                        title: "Profilo video fisso",
                         message: VideoCompressionPreset.teamsLecture.inspectorMessage
                     )
                 } else {
                     noticePanel(
                         icon: "waveform",
                         title: "Solo audio",
-                        message: "Il video viene usato come sorgente, ma l'export finale resta audio-only."
+                        message: "Il video viene usato come sorgente, ma il risultato finale contiene solo l’audio."
                     )
                 }
             }
@@ -102,24 +110,15 @@ struct CompressionInspectorView: View {
     }
 
     private var summarySection: some View {
+        // Profilo e bitrate sono già nella barra inferiore ("AAC · 96 kbps"):
+        // qui restano solo limite di dimensione e avvisi di validazione.
         Section {
-            LabeledContent("Profilo attivo") {
-                Text(activeCompressionModeLabel)
-                    .foregroundStyle(.secondary)
-            }
-
             if let targetLabel = preview.targetSizeLabel {
-                LabeledContent("Target") {
+                LabeledContent("Dimensione massima") {
                     Text(targetLabel)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
-            }
-
-            LabeledContent(summarySecondaryLabel) {
-                Text(activeBitrateSummary)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
             }
 
             if case .loadingMetadata(let message) = preview.validation {
@@ -135,13 +134,71 @@ struct CompressionInspectorView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-        } footer: {
-            Text(summaryFooterText)
+        } header: {
+            Text("Riepilogo")
+        }
+    }
+
+    @ViewBuilder
+    private var notificationSection: some View {
+        Section("Notifiche") {
+            switch appState.notificationPermissionState {
+            case .unknown:
+                notificationRow(
+                    icon: "bell",
+                    title: "Verifica notifiche",
+                    message: "AudioPro controllerà se può avvisarti a esportazione completata."
+                )
+                Button {
+                    appState.refreshNotificationPermission()
+                } label: {
+                    Label("Verifica", systemImage: "arrow.clockwise")
+                }
+            case .notDetermined:
+                notificationRow(
+                    icon: "bell.badge",
+                    title: "Autorizzazione necessaria",
+                    message: "Consenti ad AudioPro di mostrarti una notifica quando l’esportazione finisce."
+                )
+                Button {
+                    appState.requestNotificationPermission()
+                } label: {
+                    Label("Consenti notifiche", systemImage: "checkmark.circle")
+                }
+            case .authorized:
+                notificationRow(
+                    icon: "bell.fill",
+                    title: "Notifiche attive",
+                    message: "AudioPro può avvisarti a esportazione completata."
+                )
+            case .denied:
+                notificationRow(
+                    icon: "bell.slash",
+                    title: "Notifiche disattivate",
+                    message: "macOS non mostrerà altre richieste automatiche. Riattivale da Impostazioni di Sistema."
+                )
+                Button {
+                    appState.openNotificationSettings()
+                } label: {
+                    Label("Apri Impostazioni di Sistema", systemImage: "gearshape")
+                }
+            case .unavailable(let message):
+                notificationRow(
+                    icon: "exclamationmark.triangle",
+                    title: "Notifiche non disponibili",
+                    message: message
+                )
+                Button {
+                    appState.refreshNotificationPermission()
+                } label: {
+                    Label("Riprova", systemImage: "arrow.clockwise")
+                }
+            }
         }
     }
 
     private var primarySection: some View {
-        Section("Rapido") {
+        Section {
             if preview.isVideoModeActive {
                 noticePanel(
                     icon: "video.fill",
@@ -152,22 +209,18 @@ struct CompressionInspectorView: View {
                 tracked(.copyMode) {
                     noticePanel(
                         icon: "bolt.horizontal.circle",
-                        title: "Copia Stream attiva",
+                        title: "Copia diretta attiva",
                         message: preview.usesMergeReencodeFallback
-                            ? "Con piu file Copia Stream non e disponibile. AudioPro usera AAC per concatenare i contenuti."
-                            : "L'audio viene estratto senza ricodifica. Preset e dimensione massima non vengono applicati."
+                            ? "Con più file la copia diretta non è disponibile. AudioPro userà AAC per unire i contenuti."
+                            : "L’audio viene estratto senza ricodifica. Profilo e dimensione massima non vengono applicati."
                     )
                 }
             } else {
                 tracked(.preset) {
                     VStack(alignment: .leading, spacing: 10) {
-                        LabeledContent("Preset") {
-                            Text(appState.compression.preset.rawValue)
-                                .foregroundStyle(.secondary)
-                                .monospacedDigit()
-                        }
+                        Text("Profilo")
 
-                        Picker("Preset", selection: binding(\.preset)) {
+                        Picker("Profilo", selection: binding(\.preset)) {
                             ForEach(Preset.allCases) { preset in
                                 Text(preset.rawValue).tag(preset)
                             }
@@ -175,11 +228,12 @@ struct CompressionInspectorView: View {
                         .labelsHidden()
                         .pickerStyle(.segmented)
                         .controlSize(.small)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .disabled(isTargetSizeActive)
                         .opacity(isTargetSizeActive ? 0.55 : 1)
 
                         if isTargetSizeActive {
-                            Text("Preset bloccato: con un target in MB è la dimensione massima a guidare il bitrate finale.")
+                            Text("Profilo bloccato: il limite scelto per la dimensione massima determina il bitrate finale.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -193,7 +247,8 @@ struct CompressionInspectorView: View {
                         Text("Dimensione massima")
 
                         HStack(spacing: 8) {
-                            TextField("", text: $maxSizeInput)
+                            TextField("Dimensione massima", text: $maxSizeInput, prompt: Text("Nessuna"))
+                                .labelsHidden()
                                 .textFieldStyle(.roundedBorder)
                                 .lineLimit(1)
                                 .focused($isMaxSizeFieldFocused)
@@ -223,7 +278,7 @@ struct CompressionInspectorView: View {
                                     commitMaxSizeInput()
                                     dismissMaxSizeFieldFocus()
                                 }
-                                .buttonStyle(.link)
+                                .buttonStyle(.bordered)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -236,16 +291,24 @@ struct CompressionInspectorView: View {
                     .padding(.vertical, 2)
                 }
             }
+        } header: {
+            Text("Impostazioni rapide")
+        } footer: {
+            // In Solo audio la didascalia della dimensione massima basta;
+            // la nota serve solo quando il profilo video blocca i controlli.
+            if let summaryFooterText {
+                Text(summaryFooterText)
+            }
         }
     }
 
     private var advancedSection: some View {
-        Section("Tecnico") {
+        Section("Impostazioni avanzate") {
             if preview.isVideoModeActive {
                 noticePanel(
                     icon: "lock.rectangle.stack",
-                    title: "Controlli tecnici sospesi",
-                    message: "In Video compresso usiamo un preset fisso. Codec audio, qualità fine, sample rate e target MB restano memorizzati per quando torni a Solo audio."
+                    title: "Controlli tecnici non disponibili",
+                    message: "In Video compresso usiamo un profilo fisso. Codec audio, qualità, frequenza di campionamento e dimensione massima restano memorizzati per quando torni a Solo audio."
                 )
             } else {
                 DisclosureGroup(isExpanded: $isAdvancedExpanded) {
@@ -260,7 +323,7 @@ struct CompressionInspectorView: View {
 
                         if appState.compression.codec == .copy {
                             tracked(.copyMode) {
-                                Text("In Copia Stream il codec originale viene mantenuto e le altre regolazioni non intervengono.")
+                                Text("Con la copia diretta il codec originale viene mantenuto e le altre regolazioni non intervengono.")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -283,11 +346,11 @@ struct CompressionInspectorView: View {
                                         Spacer()
                                         Text("Più fedele")
                                     }
-                                    .font(.caption2)
+                                    .font(.caption)
                                     .foregroundStyle(.tertiary)
 
                                     if appState.compression.maxOutputSizeMB != nil {
-                                        Text("Con una dimensione massima impostata, il bitrate viene adattato automaticamente e questo cursore resta in standby.")
+                                        Text("Con una dimensione massima impostata, il bitrate viene adattato automaticamente e questo cursore resta disattivato.")
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                             .fixedSize(horizontal: false, vertical: true)
@@ -300,7 +363,7 @@ struct CompressionInspectorView: View {
 
                             tracked(.sampleRate) {
                                 compactPickerRow(
-                                    title: "Sample rate",
+                                    title: "Frequenza di campionamento",
                                     selection: binding(\.sampleRate),
                                     values: SampleRate.allCases
                                 )
@@ -311,7 +374,7 @@ struct CompressionInspectorView: View {
                 } label: {
                     tracked(.advanced) {
                         HStack(spacing: 10) {
-                            Label("Avanzate", systemImage: "slider.horizontal.3")
+                            Label("Codec e qualità", systemImage: "slider.horizontal.3")
                                 .labelStyle(.titleAndIcon)
                             Spacer()
                             Text(advancedSummary)
@@ -327,46 +390,32 @@ struct CompressionInspectorView: View {
 
     private var advancedSummary: String {
         if preview.isVideoModeActive {
-            return "Preset video fisso"
+            return "Profilo video fisso"
         }
         if preview.effectiveCodec == .copy {
-            return "Copia Stream"
+            return "Copia diretta"
         }
-        return "\(preview.effectiveCodec.rawValue) • \(appState.compression.sampleRate.rawValue)"
+        return "\(preview.effectiveCodec.rawValue) · \(appState.compression.sampleRate.rawValue)"
     }
 
-    private var activeCompressionModeLabel: String {
-        if preview.isVideoModeActive {
-            return "Video compresso"
+    private var summaryHasContent: Bool {
+        if preview.targetSizeLabel != nil { return true }
+        switch preview.validation {
+        case .loadingMetadata, .failedPreflight: return true
+        default: return false
         }
-        if preview.usesMergeReencodeFallback {
-            return "Merge ricodificato"
-        }
-        if preview.effectiveCodec == .copy {
-            return "Copia Stream"
-        }
-        if isTargetSizeActive {
-            return "Target dimensione"
-        }
-        return "Preset \(appState.compression.preset.rawValue)"
     }
 
-    private var activeBitrateSummary: String {
-        if preview.isVideoModeActive {
-            return VideoCompressionPreset.teamsLecture.summary
-        }
-        return preview.bitrateLabel
+    /// Le notifiche compaiono solo quando serve un'azione: se sono già
+    /// attive non c'è niente da decidere.
+    private var notificationNeedsAttention: Bool {
+        if case .authorized = appState.notificationPermissionState { return false }
+        return true
     }
 
-    private var summarySecondaryLabel: String {
-        preview.isVideoModeActive ? "Preset video" : "Bitrate stimato"
-    }
-
-    private var summaryFooterText: String {
-        if preview.isVideoModeActive {
-            return "La modalità video usa un preset fisso. Per tornare a codec, qualità fine, sample rate o target MB seleziona Solo audio."
-        }
-        return "Regola il risultato in modo rapido con preset e target; apri Avanzate solo se vuoi intervenire su codec, qualità fine o sample rate."
+    private var summaryFooterText: String? {
+        guard preview.isVideoModeActive else { return nil }
+        return "La modalità video usa un profilo fisso. Per tornare a codec, qualità, frequenza di campionamento o dimensione massima seleziona Solo audio."
     }
 
     private var maxSizeCaption: String {
@@ -387,10 +436,10 @@ struct CompressionInspectorView: View {
 
         if let target = preview.targetSizeMB {
             let bitrate = preview.bitrateLabel
-            return "Target attivo: circa \(target.formatted(.number.precision(.fractionLength(0)))) MB. Bitrate stimato \(bitrate)."
+            return "Dimensione massima: circa \(target.formatted(.number.precision(.fractionLength(0)))) MB. Bitrate stimato \(bitrate)."
         }
 
-        return "Lascia vuoto per usare preset e qualità. Se inserisci un target in MB, premi Applica: il target prevale sulla qualità fine e blocca il preset."
+        return "Lascia vuoto per usare profilo e qualità. Se inserisci un limite in MB, premi Applica: la dimensione massima prevale sulla qualità e blocca il profilo."
     }
 
     private var isTargetSizeActive: Bool {
@@ -440,20 +489,11 @@ struct CompressionInspectorView: View {
     }
 
     private func noticePanel(icon: String, title: String, message: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: icon)
-                .foregroundStyle(.secondary)
-                .padding(.top, 2)
+        FeatureNotice(systemImage: icon, title: title, message: message)
+    }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.callout.weight(.semibold))
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
+    private func notificationRow(icon: String, title: String, message: String) -> some View {
+        noticePanel(icon: icon, title: title, message: message)
     }
 
     private func tracked<Content: View>(_ field: InspectorField, @ViewBuilder content: () -> Content) -> some View {
@@ -471,19 +511,19 @@ struct CompressionInspectorView: View {
         case .maxSize:
             return "Limite opzionale della dimensione finale in MB."
         case .applyTarget:
-            return "Applica il target di dimensione massima."
+            return "Applica la dimensione massima."
         case .advanced:
             return "Mostra i controlli tecnici di compressione."
         case .codec:
-            return "Formato di codifica dell'audio esportato."
+            return "Formato di codifica dell’audio esportato."
         case .quality:
-            return "Regola il bitrate fine quando non è attivo un target in MB."
+            return "Regola il bitrate quando non è attiva una dimensione massima."
         case .sampleRate:
-            return "Frequenza di campionamento dell'export."
+            return "Frequenza di campionamento dell’esportazione."
         case .copyMode:
             return "Nessuna ricodifica: copia la traccia audio originale."
         case .reset:
-            return "Ripristina i valori di default."
+            return "Ripristina i valori predefiniti."
         }
     }
 
@@ -496,6 +536,10 @@ struct CompressionInspectorView: View {
     }
 
     private func commitMaxSizeInput() {
+        guard appState.canModifyQueue else {
+            syncMaxSizeInput()
+            return
+        }
         let trimmed = maxSizeInput.trimmingCharacters(in: .whitespacesAndNewlines)
 
         if trimmed.isEmpty {
@@ -525,6 +569,7 @@ struct CompressionInspectorView: View {
             get: { appState.compression[keyPath: keyPath] },
             set: { newValue in
                 Task { @MainActor in
+                    guard appState.canModifyQueue else { return }
                     appState.compression[keyPath: keyPath] = newValue
                 }
             }

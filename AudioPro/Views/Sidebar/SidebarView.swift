@@ -5,177 +5,126 @@ struct SidebarView: View {
     @Binding var section: AppSection
     @ObservedObject var transcriptionModel: TranscriptionModel
     @EnvironmentObject private var appState: AudioAppState
-    @State private var draggingFileID: UUID?
-    @State private var activeDropTargetID: UUID?
-    @State private var isDropAtEndActive = false
-    
-    private let dropTypes: [UTType] = [.audio, .movie, .fileURL]
-    private let internalDragTypes: [UTType] = [.plainText, .text]
 
-    private struct AccessibleFile {
+    private let dropTypes: [UTType] = [.audio, .movie, .fileURL]
+
+    private struct AccessibleFile: Sendable {
         let url: URL
         let securityScopedURL: URL?
     }
-    
+
     var body: some View {
         ZStack {
             AmbientBackdrop(style: .sidebar)
                 .ignoresSafeArea(.container, edges: [.top, .leading, .bottom])
+
             List(selection: $section) {
-                Section("Sezioni") {
+                Section("Strumenti") {
                     ForEach(AppSection.allCases) { item in
                         HStack {
                             Label(item.name, systemImage: item.symbolName)
                             Spacer()
-                            if item == .transcription, transcriptionModel.state.isBusy {
+                            if item == .merger, appState.processingState.isBusy {
+                                exportIndicator
+                            } else if item == .transcription,
+                                      transcriptionModel.state.isBusy || transcriptionModel.modelDownloadState.isBusy {
                                 transcriptionIndicator
                             }
                         }
                         .tag(item)
                     }
                 }
-                if section == .merger {
-                    Section("Coda file") {
-                        ForEach(appState.filteredFiles, id: \.id, content: row)
-                            .onMove { offsets, destination in
-                                guard appState.searchText.isEmpty else { return }
-                                withAnimation {
-                                    appState.moveFiles(from: offsets, to: destination)
-                                }
-                            }
-                            .onDelete(perform: appState.remove(atOffsets:))
-                    }
-                }
             }
-            .onDrop(
-                of: internalDragTypes,
-                delegate: ListEndDropDelegate(
-                    files: appState.audioFiles,
-                    isEnabled: appState.searchText.isEmpty,
-                    draggingFileID: $draggingFileID,
-                    activeDropTargetID: $activeDropTargetID,
-                    isDropAtEndActive: $isDropAtEndActive,
-                    moveFile: { from, destination in
-                        withAnimation {
-                            appState.moveFiles(from: IndexSet(integer: from), to: destination)
-                        }
-                    }
-                )
-            )
             .listStyle(.sidebar)
             .scrollContentBackground(.hidden)
-            .onDeleteCommand {
-                if let selected = appState.selectedFile {
-                    appState.remove(selected)
-                }
-            }
         }
         .navigationTitle("AudioPro")
-        // Drop esterno gestito a livello di container per non interferire con il reordering interno
+        .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
+        // La coda file vive ora nel contenuto principale: la sidebar accetta
+        // comunque il drop esterno per aggiungere file rapidamente.
         .onDrop(of: dropTypes, isTargeted: nil, perform: handleExternalDrop(providers:))
     }
 
     @ViewBuilder
-    private var transcriptionIndicator: some View {
-        if let progress = transcriptionModel.state.progressValue {
-            ProgressView(value: progress)
-                .progressViewStyle(.circular)
-                .controlSize(.small)
-                .help("Trascrizione \(Int(progress * 100))%")
-        } else {
-            ProgressView()
-                .controlSize(.small)
-                .help(transcriptionModel.state.statusMessage ?? "Trascrizione in corso")
+    private var exportIndicator: some View {
+        if case .running(let progress) = appState.processingState {
+            JobProgressBadge(progress: progress)
+                .help("Esportazione \(Int(progress * 100))%")
+                .accessibilityLabel("Avanzamento esportazione")
+                .accessibilityValue(percentAccessibilityValue(progress))
         }
     }
-    
+
     @ViewBuilder
-    private func row(for file: AudioFile) -> some View {
-        let isSelected = appState.selectedFile?.id == file.id
-        AudioFileRowView(
-            file: file,
-            isSelected: isSelected
-        )
-        .listRowSeparator(.hidden)
-        .listRowBackground(Color.clear)
-        // Le righe file non partecipano alla selezione di sezione della List:
-        // la selezione del file resta gestita da onTapGesture + appState.
-        .selectionDisabled()
-        .contentShape(Rectangle())
-        .onTapGesture {
-            appState.selectedFile = file
-        }
-        .onDrag {
-            draggingFileID = file.id
-            activeDropTargetID = nil
-            isDropAtEndActive = false
-            return NSItemProvider(object: file.id.uuidString as NSString)
-        }
-        .onDrop(
-            of: internalDragTypes,
-            delegate: FileReorderDropDelegate(
-                targetFileID: file.id,
-                files: appState.audioFiles,
-                isEnabled: appState.searchText.isEmpty,
-                draggingFileID: $draggingFileID,
-                activeDropTargetID: $activeDropTargetID,
-                isDropAtEndActive: $isDropAtEndActive,
-                moveFile: { from, destination in
-                    withAnimation {
-                        appState.moveFiles(from: IndexSet(integer: from), to: destination)
-                    }
-                }
-            )
-        )
-        .contextMenu {
-            Button("Elimina", role: .destructive) {
-                appState.remove(file)
-            }
+    private var transcriptionIndicator: some View {
+        if transcriptionModel.modelDownloadState.isBusy {
+            JobProgressBadge(progress: transcriptionModel.modelDownloadState.progressValue)
+                .help(transcriptionModel.modelDownloadState.statusMessage ?? "Download del modello in corso")
+                .accessibilityLabel("Download del modello Whisper")
+                .accessibilityValue(
+                    transcriptionModel.modelDownloadState.statusMessage
+                        ?? "Download del modello in corso"
+                )
+        } else if let progress = transcriptionModel.state.progressValue {
+            JobProgressBadge(progress: progress)
+                .help("Trascrizione \(Int(progress * 100))%")
+                .accessibilityLabel("Avanzamento trascrizione")
+                .accessibilityValue(percentAccessibilityValue(progress))
+        } else {
+            JobProgressBadge(progress: nil)
+                .help(transcriptionModel.state.statusMessage ?? "Trascrizione in corso")
+                .accessibilityLabel("Stato trascrizione")
+                .accessibilityValue(
+                    transcriptionModel.state.statusMessage ?? "Trascrizione in corso"
+                )
         }
     }
-    
+
+    private func percentAccessibilityValue(_ progress: Double) -> String {
+        "\(Int(min(max(progress, 0), 1) * 100))%"
+    }
+
     private func handleExternalDrop(providers: [NSItemProvider]) -> Bool {
-        // Non intercettare i drag interni (riordino) che usano provider di tipo testo
-        if providers.contains(where: { provider in
-            internalDragTypes.contains { provider.hasItemConformingToTypeIdentifier($0.identifier) }
-        }) {
-            return false
-        }
-        
+        guard appState.canModifyQueue else { return false }
         let acceptedProviders = providers.filter { provider in
             dropTypes.contains { provider.hasItemConformingToTypeIdentifier($0.identifier) }
         }
         guard acceptedProviders.isEmpty == false else { return false }
-        
+
         Task {
-            var files: [AudioFile] = []
+            var accessibleFiles: [AccessibleFile] = []
             for provider in acceptedProviders {
-                if let url = await loadFileURL(from: provider),
-                   let accessibleFile = makeAccessibleFile(from: url) {
-                    files.append(AudioFile(url: accessibleFile.url, securityScopedURL: accessibleFile.securityScopedURL))
+                if let url = await loadFileURL(from: provider) {
+                    let accessibleFile = await Task.detached(priority: .utility) {
+                        Self.makeAccessibleFile(from: url)
+                    }.value
+                    if let accessibleFile {
+                        accessibleFiles.append(accessibleFile)
+                    }
                 }
             }
-            
-            guard files.isEmpty == false else { return }
+
+            guard accessibleFiles.isEmpty == false else { return }
             await MainActor.run {
+                let files = accessibleFiles.map {
+                    AudioFile(url: $0.url, securityScopedURL: $0.securityScopedURL)
+                }
                 appState.addFiles(files)
             }
         }
-        
+
         return true
     }
-    
+
     private func loadFileURL(from provider: NSItemProvider) async -> URL? {
         let preferredTypes = dropTypes.map(\.identifier)
-        
-        // Prova in-place per il primo tipo supportato
+
         if let typeIdentifier = preferredTypes.first(where: { provider.hasItemConformingToTypeIdentifier($0) }) {
             if let url = await loadInPlaceURL(provider: provider, typeIdentifier: typeIdentifier) {
                 return url
             }
         }
-        
-        // Fallback: prova a caricare l'URL come oggetto
+
         if provider.canLoadObject(ofClass: URL.self) {
             return await withCheckedContinuation { continuation in
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
@@ -183,11 +132,10 @@ struct SidebarView: View {
                 }
             }
         }
-        
+
         return await withCheckedContinuation { continuation in
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
                 if let data = item as? Data {
-                    // Se i provider espongono bookmark data, tenta la risoluzione
                     var isStale = false
                     if let url = try? URL(
                         resolvingBookmarkData: data,
@@ -210,7 +158,7 @@ struct SidebarView: View {
             }
         }
     }
-    
+
     private func loadInPlaceURL(provider: NSItemProvider, typeIdentifier: String) async -> URL? {
         await withCheckedContinuation { continuation in
             provider.loadInPlaceFileRepresentation(forTypeIdentifier: typeIdentifier) { url, _, _ in
@@ -218,8 +166,8 @@ struct SidebarView: View {
             }
         }
     }
-    
-    private func makeAccessibleFile(from url: URL) -> AccessibleFile? {
+
+    private nonisolated static func makeAccessibleFile(from url: URL) -> AccessibleFile? {
         let hasSecurityScope = url.startAccessingSecurityScopedResource()
 
         guard FileManager.default.fileExists(atPath: url.path), isSupportedMediaFile(url) else {
@@ -234,100 +182,18 @@ struct SidebarView: View {
             securityScopedURL: hasSecurityScope ? url : nil
         )
     }
-    
-    private func isSupportedMediaFile(_ url: URL) -> Bool {
+
+    private nonisolated static func isSupportedMediaFile(_ url: URL) -> Bool {
         let resourceValues = try? url.resourceValues(forKeys: [.contentTypeKey])
         if let type = resourceValues?.contentType {
             return type.conforms(to: .audio) || type.conforms(to: .movie)
         }
-        
+
         if let fallbackType = UTType(filenameExtension: url.pathExtension) {
             return fallbackType.conforms(to: .audio) || fallbackType.conforms(to: .movie)
         }
-        
+
         return false
-    }
-}
-
-private struct FileReorderDropDelegate: DropDelegate {
-    let targetFileID: UUID
-    let files: [AudioFile]
-    let isEnabled: Bool
-    @Binding var draggingFileID: UUID?
-    @Binding var activeDropTargetID: UUID?
-    @Binding var isDropAtEndActive: Bool
-    let moveFile: (Int, Int) -> Void
-
-    func validateDrop(info: DropInfo) -> Bool {
-        isEnabled && draggingFileID != nil
-    }
-
-    func dropEntered(info: DropInfo) {
-        guard isEnabled else { return }
-        guard let draggingFileID, draggingFileID != targetFileID else { return }
-        guard activeDropTargetID != targetFileID else { return }
-        guard
-            let from = files.firstIndex(where: { $0.id == draggingFileID }),
-            let to = files.firstIndex(where: { $0.id == targetFileID }),
-            from != to
-        else { return }
-
-        isDropAtEndActive = false
-        activeDropTargetID = targetFileID
-        moveFile(from, to > from ? to + 1 : to)
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        guard isEnabled else { return nil }
-        return DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        activeDropTargetID = nil
-        draggingFileID = nil
-        isDropAtEndActive = false
-        return isEnabled
-    }
-}
-
-private struct ListEndDropDelegate: DropDelegate {
-    let files: [AudioFile]
-    let isEnabled: Bool
-    @Binding var draggingFileID: UUID?
-    @Binding var activeDropTargetID: UUID?
-    @Binding var isDropAtEndActive: Bool
-    let moveFile: (Int, Int) -> Void
-
-    func validateDrop(info: DropInfo) -> Bool {
-        isEnabled && draggingFileID != nil
-    }
-
-    func dropEntered(info: DropInfo) {
-        guard isEnabled else { return }
-        guard let draggingFileID else { return }
-        guard let from = files.firstIndex(where: { $0.id == draggingFileID }) else { return }
-        guard from != files.count - 1 else { return }
-        guard isDropAtEndActive == false else { return }
-
-        activeDropTargetID = nil
-        isDropAtEndActive = true
-        moveFile(from, files.count)
-    }
-
-    func dropExited(info: DropInfo) {
-        isDropAtEndActive = false
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        guard isEnabled else { return nil }
-        return DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        activeDropTargetID = nil
-        draggingFileID = nil
-        isDropAtEndActive = false
-        return isEnabled
     }
 }
 
@@ -336,38 +202,10 @@ private struct ListEndDropDelegate: DropDelegate {
 struct SidebarView_Previews: PreviewProvider {
     @MainActor
     static var previews: some View {
-        Group {
-            SidebarView(
-                section: .constant(.merger),
-                transcriptionModel: TranscriptionModel()
-            )
-                .environmentObject(AudioAppState())
-                .environment(\.locale, Locale(identifier: "it"))
-
-            SidebarView(
-                section: .constant(.merger),
-                transcriptionModel: TranscriptionModel()
-            )
-                .environmentObject(AudioAppState())
-
-            SidebarView(
-                section: .constant(.merger),
-                transcriptionModel: TranscriptionModel()
-            )
-                .environmentObject(singleFileState)
-
-            SidebarView(
-                section: .constant(.merger),
-                transcriptionModel: TranscriptionModel()
-            )
-                .environmentObject(PreviewSamples.appState())
-        }
-    }
-
-    @MainActor
-    private static var singleFileState: AudioAppState {
-        let state = AudioAppState()
-        state.addFiles([PreviewSamples.mockFile(name: "recording.m4a")])
-        return state
+        SidebarView(
+            section: .constant(.merger),
+            transcriptionModel: TranscriptionModel()
+        )
+        .environmentObject(PreviewSamples.appState())
     }
 }

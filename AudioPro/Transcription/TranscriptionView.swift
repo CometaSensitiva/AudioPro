@@ -1,304 +1,388 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct TranscriptionView: View {
+    @EnvironmentObject private var playbackCommandBridge: PlaybackCommandBridge
     @ObservedObject var model: TranscriptionModel
     let onOpenInPlayback: (TranscriptionResult) -> Void
+    @Binding var isInspectorPresented: Bool
+    @State private var sourceFile: AudioFile?
 
     var body: some View {
-        ZStack {
-            ZStack {
-                AmbientBackdrop()
-                ReactiveWaveform(isActive: model.state.activatesWaveform)
-            }
-            .ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: LiquidGlassDesign.spacing) {
-                    introduction
-                    outputCard
-                    sourceCard
-                    stateCard
-                }
-                .frame(maxWidth: 720)
-                .padding(LiquidGlassDesign.padding)
-                .frame(maxWidth: .infinity)
+        Group {
+            if model.selectedMediaURL == nil {
+                emptyState
+            } else {
+                // Stessa tabella di Esportazione: il file scelto è una riga,
+                // le impostazioni stanno nell'inspector, l'azione nella barra.
+                sourceTable
             }
         }
+        .sectionBackground(
+            isActive: model.state.activatesWaveform || model.modelDownloadState.isBusy,
+            intensity: 0.28
+        )
         .safeAreaInset(edge: .bottom, spacing: 0) {
             actionBar
         }
-        .navigationTitle("")
-        .navigationSubtitle(model.selectedMediaName ?? "Nessun audio selezionato")
-        .toolbar(removing: .title)
+        .navigationTitle("Trascrizione")
+        .navigationSubtitle(model.selectedMediaName ?? "Nessun file selezionato")
+        .inspector(isPresented: $isInspectorPresented) {
+            TranscriptionInspectorView(model: model)
+                .inspectorColumnWidth(
+                    min: LiquidGlassDesign.inspectorMinWidth,
+                    ideal: LiquidGlassDesign.inspectorIdealWidth,
+                    max: LiquidGlassDesign.inspectorMaxWidth
+                )
+        }
+        .focusedSceneValue(\.audioProCommandContext, commandContext)
+        .onChange(of: model.selectedMediaURL, initial: true) { _, url in
+            sourceFile = url.map { AudioFile(url: $0) }
+        }
+        .onAppear {
+            model.refreshModelAvailability()
+            // Se il modello non è pronto, apro l'inspector col download.
+            if model.isModelAvailable == false {
+                isInspectorPresented = true
+            }
+        }
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
+            // Stessa grammatica delle altre sezioni: a sinistra le azioni
+            // per aprire, a destra quelle sul contenuto, poi l'inspector.
+            ToolbarItemGroup(placement: .navigation) {
                 Button {
                     model.chooseMedia()
                 } label: {
-                    Label("Scegli audio", systemImage: "waveform")
+                    Label("Scegli file…", systemImage: "doc.badge.plus")
                 }
                 .labelStyle(.iconOnly)
                 .help("Scegli un file audio o video")
                 .disabled(model.state.isBusy)
+            }
 
+            ToolbarItemGroup(placement: .primaryAction) {
                 Button(role: .destructive) {
                     model.clearSelection()
                 } label: {
-                    Label("Svuota", systemImage: "trash")
+                    Label("Rimuovi file", systemImage: "trash")
                 }
                 .labelStyle(.iconOnly)
                 .help("Rimuovi il file selezionato")
                 .disabled(model.selectedMediaURL == nil || model.state.isBusy)
             }
+
+            ToolbarSpacer(.flexible, placement: .primaryAction)
+
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    isInspectorPresented.toggle()
+                } label: {
+                    Label("Impostazioni", systemImage: "sidebar.trailing")
+                }
+                .labelStyle(.iconOnly)
+                .help(isInspectorPresented ? "Nascondi impostazioni" : "Mostra impostazioni")
+            }
         }
     }
 
-    private var introduction: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Trascrizione locale")
-                .font(.largeTitle.bold())
-            Text("Crea sottotitoli sincronizzati e/o una copia di testo usando Whisper sul Mac.")
-                .font(.body)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.bottom, 4)
-    }
-
-    private var outputCard: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("Output trascrizione")
-                .font(.title3.weight(.semibold))
-
-            HStack(alignment: .top, spacing: 28) {
-                SummaryMetric(label: "Elaborazione", value: "Sul Mac", icon: "desktopcomputer")
-                SummaryMetric(label: "Lingua", value: "Italiano", icon: "character.book.closed")
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("Formato", systemImage: "doc.on.doc")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Picker("Formato", selection: $model.outputSelection) {
-                        ForEach(TranscriptionOutputSelection.allCases) { selection in
-                            Text(selection.displayName).tag(selection)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
-                    .disabled(model.canConfigureOutput == false)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+    /// Empty state come in Esportazione: solo testo + azione, nessuna card.
+    private var emptyState: some View {
+        FeatureEmptyState(
+            "Nessun file selezionato",
+            systemImage: "waveform.slash",
+            message: "Scegli una registrazione audio o video oppure trascrivi il risultato di un’esportazione."
+        ) {
+            Button("Scegli file…") {
+                model.chooseMedia()
             }
-
-            Divider()
-
-            LabeledContent("Modello") {
-                Label(
-                    model.modelStatusMessage,
-                    systemImage: model.isModelAvailable
-                        ? "checkmark.circle.fill"
-                        : "exclamationmark.triangle.fill"
-                )
-                .foregroundStyle(model.isModelAvailable ? AnyShapeStyle(.secondary) : AnyShapeStyle(.orange))
-            }
-
-            if model.isModelAvailable == false {
-                Text("La trascrizione sarà disponibile dopo aver incluso il modello e ricompilato AudioPro.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding()
-        .background(.regularMaterial, in: cardShape)
-    }
-
-    @ViewBuilder
-    private var sourceCard: some View {
-        if let mediaURL = model.selectedMediaURL {
-            HStack(spacing: 12) {
-                Image(systemName: "waveform")
-                    .font(.title2)
-                    .foregroundStyle(.tint)
-                    .frame(width: 32)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("File da trascrivere")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(mediaURL.lastPathComponent)
-                        .font(.headline)
-                        .lineLimit(1)
-                    Text(mediaURL.deletingLastPathComponent().path(percentEncoded: false))
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                Spacer()
-            }
-            .padding()
-            .background(.regularMaterial, in: cardShape)
-        } else {
-            ContentUnavailableView {
-                Label("Nessun audio selezionato", systemImage: "waveform.slash")
-            } description: {
-                Text("Scegli una registrazione oppure usa “Trascrivi output” dopo un’esportazione.")
-            } actions: {
-                Button("Scegli audio") {
-                    model.chooseMedia()
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 220)
-            .background(.regularMaterial, in: cardShape)
         }
     }
 
-    @ViewBuilder
-    private var stateCard: some View {
-        switch model.state {
-        case .idle, .selectingDestination:
-            EmptyView()
-        case .loadingModel:
-            progressCard {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Caricamento del modello Whisper locale…")
+    private var sourceTable: some View {
+        Table(of: AudioFile.self) {
+            mediaFileColumns()
+        } rows: {
+            if let sourceFile {
+                TableRow(sourceFile)
             }
-        case .transcribing(let progress):
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Label("Trascrizione in corso", systemImage: "waveform.and.mic")
-                        .font(.headline)
-                    Spacer()
-                    Text("\(Int(progress * 100))%")
-                        .font(.headline.monospacedDigit())
-                }
-                ProgressView(value: progress)
-                    .progressViewStyle(.linear)
-                Text("Puoi cambiare sezione: il lavoro continuerà in background.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding()
-            .background(.regularMaterial, in: cardShape)
-        case .cancelling:
-            progressCard {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Interruzione sicura e pulizia dei file temporanei…")
-            }
-        case .completed(let result):
-            VStack(alignment: .leading, spacing: 8) {
-                Label("Trascrizione completata", systemImage: "checkmark.circle.fill")
-                    .font(.headline)
-                    .foregroundStyle(.green)
-                ForEach(result.generatedURLs, id: \.self) { url in
-                    Text(url.lastPathComponent)
-                }
-                Text(completionSummary(for: result))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
-            .background(.regularMaterial, in: cardShape)
-        case .failed(let message):
-            Label(message, systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(.regularMaterial, in: cardShape)
         }
+        .scrollContentBackground(.hidden)
+        .tableStyle(.inset(alternatesRowBackgrounds: false))
     }
 
     @ViewBuilder
     private var actionBar: some View {
-        if model.selectedMediaURL != nil || model.state.isBusy {
-            HStack(spacing: 12) {
-                switch model.state {
-                case .selectingDestination:
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Concedi l'accesso alla cartella nel pannello macOS")
+        if shouldShowActionBar {
+            AudioProBottomGlassBar(isInteractive: actionBarIsInteractive, verticalPadding: 12) {
+                actionBarContent
+            }
+            // Stessa larghezza della scheda del file: barra e contenuto allineati.
+            .contentReadingWidth()
+        }
+    }
+
+    @ViewBuilder
+    private var actionBarContent: some View {
+        if showsModelSetupInActionBar {
+            modelSetupActionBarContent
+        } else {
+            transcriptionActionBarContent
+        }
+    }
+
+    @ViewBuilder
+    private var modelSetupActionBarContent: some View {
+        switch model.modelDownloadState {
+        case .idle, .completed:
+            ResponsiveActionRow {
+                FeatureNotice(
+                    systemImage: "arrow.down.circle",
+                    title: "Modello Whisper richiesto",
+                    message: model.modelStatusMessage,
+                    isSingleLine: true
+                )
+            } actions: {
+                Button("Scarica il modello") {
+                    model.startModelDownload()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.canDownloadModel == false)
+            }
+        case .downloading(let progress):
+            ResponsiveActionRow {
+                JobProgressLine(
+                    title: "Download del modello in corso",
+                    progress: progress,
+                    systemImage: "arrow.down.circle",
+                    message: "Puoi chiudere le impostazioni: il download continuerà in secondo piano."
+                )
+            } actions: {
+                Button("Interrompi", role: .destructive) {
+                    model.cancelModelDownload()
+                }
+                .buttonStyle(.bordered)
+            }
+        case .cancelling:
+            ResponsiveActionRow {
+                JobProgressLine(
+                    title: "Interruzione del download",
+                    progress: nil,
+                    systemImage: "xmark.circle",
+                    message: "AudioPro attende la chiusura sicura del download."
+                )
+            } actions: {
+                EmptyView()
+            }
+        case .failed(let message):
+            ResponsiveActionRow {
+                FeatureNotice(
+                    systemImage: "exclamationmark.triangle.fill",
+                    title: "Download del modello non riuscito",
+                    message: message,
+                    tint: LiquidGlassStatusColor.failure,
+                    isSingleLine: true
+                )
+            } actions: {
+                Button("Riprova il download") {
+                    model.startModelDownload()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.canDownloadModel == false)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var transcriptionActionBarContent: some View {
+        switch model.state {
+        case .selectingDestination:
+            ResponsiveActionRow {
+                VStack(alignment: .leading, spacing: 3) {
+                    Label("Scegli la destinazione", systemImage: "folder.badge.plus")
+                        .font(.callout.weight(.medium))
+                    Text("Completa oppure annulla il pannello macOS aperto.")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Interrompi", role: .destructive) {
-                        model.cancel()
-                    }
-                case .loadingModel, .transcribing:
-                    if let progress = model.state.progressValue {
-                        ProgressView(value: progress)
-                            .progressViewStyle(.circular)
-                            .controlSize(.small)
-                    } else {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                    Text(model.state.statusMessage ?? "Trascrizione in corso")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Interrompi", role: .destructive) {
-                        model.cancel()
-                    }
-                case .cancelling:
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Attendi la pulizia…")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                case .completed(let result):
+                }
+            } actions: {
+                EmptyView()
+            }
+        case .loadingModel:
+            ResponsiveActionRow {
+                JobProgressLine(
+                    title: "Caricamento del modello",
+                    progress: nil,
+                    systemImage: "cpu",
+                    message: "La trascrizione inizierà automaticamente appena il modello sarà pronto."
+                )
+            } actions: {
+                Button("Interrompi", role: .destructive) {
+                    model.cancel()
+                }
+                .buttonStyle(.bordered)
+            }
+        case .transcribing(let progress):
+            ResponsiveActionRow {
+                JobProgressLine(
+                    title: "Trascrizione in corso",
+                    progress: progress,
+                    systemImage: "waveform.and.mic",
+                    message: "Puoi cambiare sezione: il lavoro continuerà in secondo piano."
+                )
+            } actions: {
+                Button("Interrompi", role: .destructive) {
+                    model.cancel()
+                }
+                .buttonStyle(.bordered)
+            }
+        case .cancelling:
+            ResponsiveActionRow {
+                JobProgressLine(
+                    title: "Interruzione in corso",
+                    progress: nil,
+                    systemImage: "xmark.circle",
+                    message: "AudioPro sta chiudendo il processo e rimuovendo i file temporanei."
+                )
+            } actions: {
+                EmptyView()
+            }
+        case .completed(let result):
+            ResponsiveActionRow {
+                Label("Trascrizione completata", systemImage: "checkmark.circle.fill")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(LiquidGlassStatusColor.success)
+            } actions: {
+                HStack(spacing: 8) {
                     Button("Mostra nel Finder") {
                         model.showResultInFinder()
                     }
-                    Spacer()
+                    .buttonStyle(.bordered)
+
                     if result.canOpenInPlayback {
                         Button("Apri in Riproduzione") {
                             onOpenInPlayback(result)
                         }
                         .buttonStyle(.borderedProminent)
                     }
-                case .idle, .failed:
-                    Text("macOS chiederà nome e accesso alla cartella prima di iniziare.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Scegli nome e cartella") {
-                        model.startTranscription()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(model.canStart == false)
                 }
             }
-            .padding(.horizontal, LiquidGlassDesign.padding)
-            .padding(.vertical, 12)
-            .glassEffect(
-                .regular.interactive(),
-                in: .rect(cornerRadius: LiquidGlassDesign.controlCornerRadius, style: .continuous)
-            )
-            .padding(.horizontal, LiquidGlassDesign.padding)
-            .padding(.bottom, LiquidGlassDesign.spacing)
+        case .idle:
+            ResponsiveActionRow {
+                VStack(alignment: .leading, spacing: 3) {
+                    Label("Pronto per la trascrizione", systemImage: "waveform.and.mic")
+                        .font(.callout.weight(.medium))
+                    Text("\(model.outputSelection.displayName) · Whisper Large v3 · sul Mac")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            } actions: {
+                Button("Trascrivi…") {
+                    model.startTranscription()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.canStart == false)
+            }
+        case .failed(let message):
+            ResponsiveActionRow {
+                FeatureNotice(
+                    systemImage: "exclamationmark.triangle.fill",
+                    title: "Trascrizione non riuscita",
+                    message: message,
+                    tint: LiquidGlassStatusColor.failure,
+                    isSingleLine: true
+                )
+            } actions: {
+                Button("Riprova…") {
+                    model.startTranscription()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.canStart == false)
+            }
         }
     }
 
-    private func progressCard<Content: View>(
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        HStack(spacing: 10, content: content)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
-            .background(.regularMaterial, in: cardShape)
-    }
-
-    private var cardShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: LiquidGlassDesign.cornerRadius, style: .continuous)
-    }
-
-    private func completionSummary(for result: TranscriptionResult) -> String {
-        if result.canOpenInPlayback {
-            return "\(result.cues.count) segmenti pronti per la riproduzione sincronizzata."
+    private var shouldShowActionBar: Bool {
+        if modelSetupNeedsPresentation && isInspectorPresented {
+            return false
         }
-        return "\(result.cues.count) segmenti salvati come testo semplice."
+
+        return model.selectedMediaURL != nil
+            || model.state.isBusy
+            || showsModelSetupInActionBar
+    }
+
+    private var showsModelSetupInActionBar: Bool {
+        modelSetupNeedsPresentation && isInspectorPresented == false
+    }
+
+    /// Il download del modello vive nell'inspector quando è aperto e nella
+    /// barra inferiore quando è chiuso: non esistono due comandi concorrenti.
+    private var modelSetupNeedsPresentation: Bool {
+        if model.modelDownloadState.isBusy {
+            return true
+        }
+        guard model.isModelAvailable == false else { return false }
+        switch model.state {
+        case .idle, .failed:
+            return true
+        case .selectingDestination, .loadingModel, .transcribing, .cancelling, .completed:
+            return false
+        }
+    }
+
+    private var actionBarIsInteractive: Bool {
+        if showsModelSetupInActionBar {
+            switch model.modelDownloadState {
+            case .downloading:
+                return true
+            case .idle, .failed:
+                return model.canDownloadModel
+            case .cancelling, .completed:
+                return false
+            }
+        }
+
+        return switch model.state {
+        case .loadingModel, .transcribing, .completed:
+            true
+        case .idle, .failed:
+            model.canStart
+        case .selectingDestination, .cancelling:
+            false
+        }
+    }
+
+    private func abbreviatedDirectory(for url: URL) -> String {
+        let path = url.deletingLastPathComponent().path(percentEncoded: false)
+        // Nella sandbox NSHomeDirectory punta al container dell'app:
+        // per abbreviare con ~ serve la home reale dell'utente.
+        guard let entry = getpwuid(getuid()), let home = entry.pointee.pw_dir else {
+            return path
+        }
+        let realHome = String(cString: home)
+        guard path == realHome || path.hasPrefix(realHome + "/") else { return path }
+        return "~" + path.dropFirst(realHome.count)
+    }
+
+    private var commandContext: AudioProCommandContext {
+        .transcription(
+            canChooseMedia: model.state.isBusy == false,
+            chooseMedia: model.chooseMedia,
+            playback: playbackCommandBridge.commandContext
+        )
+    }
+}
+
+nonisolated enum TranscriptionMediaSymbol {
+    static func systemName(for url: URL) -> String {
+        let resourceType = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType
+        let extensionType = UTType(filenameExtension: url.pathExtension.lowercased())
+        let type = resourceType ?? extensionType
+
+        if type?.conforms(to: .movie) == true {
+            return "video.fill"
+        }
+        return "waveform"
     }
 }

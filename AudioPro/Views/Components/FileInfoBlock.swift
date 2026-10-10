@@ -5,12 +5,12 @@ struct FileInfoBlock: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Output stimato")
+            Text("Risultato stimato")
                 .font(.title3.weight(.semibold))
 
             HStack(alignment: .top, spacing: 28) {
                 SummaryMetric(label: "Durata finale", value: preview.totalDurationLabel, icon: "clock")
-                SummaryMetric(label: "Output", value: preview.estimatedOutputLabel, icon: "externaldrive")
+                SummaryMetric(label: "Dimensione", value: preview.estimatedOutputLabel, icon: "externaldrive")
                 SummaryMetric(label: "Risparmio", value: preview.savingsLabel, icon: "arrow.down.circle")
             }
 

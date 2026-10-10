@@ -4,7 +4,6 @@
 // ============================================================================
 
 import SwiftUI
-import UserNotifications
 
 @main
 struct AudioProApp: App {
@@ -12,27 +11,22 @@ struct AudioProApp: App {
     @StateObject private var session = AppSession()
 
     init() {
-        // Richiedi permessi per le notifiche all'avvio
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
-            if let error = error {
-                print("Errore richiesta permessi notifiche: \(error.localizedDescription)")
-            }
-        }
         NotificationManager.shared.configure()
     }
     
     var body: some Scene {
         WindowGroup {
             ContentView(session: session)
+                .environment(\.locale, Locale(identifier: "it_IT"))
                 .task {
-                    appDelegate.transcriptionModel = session.transcriptionModel
+                    appDelegate.session = session
                 }
         }
         .windowStyle(.hiddenTitleBar)
         // Sidebar (~220) + dettaglio + inspector opzionale (360)
-        .defaultSize(width: 920, height: 620)
+        .defaultSize(width: 1080, height: 700)
         .commands {
-            PlayerCommands()
+            AudioProCommands()
         }
     }
 }
