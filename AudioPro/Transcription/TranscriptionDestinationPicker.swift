@@ -62,11 +62,33 @@ final class TranscriptionDestinationPicker: TranscriptionDestinationSelecting {
             )
 
             let hasSecurityScope = selection.directoryURL.startAccessingSecurityScopedResource()
-            let existingURLs = destination.selectedURLs.filter {
-                FileManager.default.fileExists(atPath: $0.path)
+            let classifiedURLs = destination.selectedURLs.map { url in
+                (
+                    url,
+                    TranscriptionOutputPathClassifier.kind(at: url)
+                )
             }
             if hasSecurityScope {
                 selection.directoryURL.stopAccessingSecurityScopedResource()
+            }
+
+            let unsupportedURLs = classifiedURLs.compactMap { url, kind in
+                kind == .unsupported ? url : nil
+            }
+            if unsupportedURLs.isEmpty == false {
+                switch presentUnsupportedConflictAlert(existingURLs: unsupportedURLs) {
+                case .rename:
+                    continue
+                case .cancel:
+                    return nil
+                case .replace:
+                    assertionFailure("Unsupported output paths cannot be replaced.")
+                    return nil
+                }
+            }
+
+            let existingURLs = classifiedURLs.compactMap { url, kind in
+                kind == .regularFile ? url : nil
             }
 
             guard existingURLs.isEmpty == false else {
@@ -147,7 +169,7 @@ final class TranscriptionDestinationPicker: TranscriptionDestinationSelecting {
         panel.canCreateDirectories = true
         panel.directoryURL = initialDirectoryURL
         panel.message = """
-        Scegli nome e cartella. AudioPro richiede l'accesso per creare i file della trascrizione.
+        Scegli il nome e la cartella. AudioPro richiede l’accesso per creare i file della trascrizione.
         \(outputSelection.creationDescription)
         """
         panel.prompt = "Consenti e avvia"
@@ -169,13 +191,37 @@ final class TranscriptionDestinationPicker: TranscriptionDestinationSelecting {
         alert.runModal()
     }
 
-    private func presentConflictAlert(existingURLs: [URL]) -> ConflictChoice {
+    private func presentUnsupportedConflictAlert(existingURLs: [URL]) -> ConflictChoice {
         let names = existingURLs.map(\.lastPathComponent).joined(separator: ", ")
+        let replacementReference = existingURLs.count == 1 ? "questo elemento" : "questi elementi"
+        let conflictDescription = existingURLs.count == 1
+            ? "Esiste già un elemento che non è un file regolare: \(names)."
+            : "Esistono già elementi che non sono file regolari: \(names)."
         let alert = NSAlert()
         alert.alertStyle = .warning
-        alert.messageText = "File già esistente"
+        alert.messageText = "Destinazione non sostituibile"
         alert.informativeText = """
-        Esiste già: \(names). I file attuali resteranno invariati finché la nuova trascrizione non sarà completata.
+        \(conflictDescription) Per proteggere i dati, AudioPro non può sostituire \(replacementReference).
+        """
+        alert.addButton(withTitle: "Cambia nome")
+        alert.addButton(withTitle: "Annulla")
+
+        return alert.runModal() == .alertFirstButtonReturn ? .rename : .cancel
+    }
+
+    private func presentConflictAlert(existingURLs: [URL]) -> ConflictChoice {
+        let names = existingURLs.map(\.lastPathComponent).joined(separator: ", ")
+        let preservationDescription = existingURLs.count == 1
+            ? "Il file attuale resterà invariato finché la nuova trascrizione non sarà completata."
+            : "I file attuali resteranno invariati finché la nuova trascrizione non sarà completata."
+        let conflictDescription = existingURLs.count == 1
+            ? "Esiste già il file \(names)."
+            : "Esistono già questi file: \(names)."
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = existingURLs.count == 1 ? "File già esistente" : "File già esistenti"
+        alert.informativeText = """
+        \(conflictDescription) \(preservationDescription)
         """
         alert.addButton(withTitle: existingURLs.count > 1 ? "Sostituisci i file" : "Sostituisci")
         alert.addButton(withTitle: "Cambia nome")

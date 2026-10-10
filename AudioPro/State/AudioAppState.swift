@@ -13,11 +13,12 @@ final class AudioAppState: ObservableObject {
         let message: String
     }
 
-    @Published var audioFiles: [AudioFile] = []
+    @Published private(set) var audioFiles: [AudioFile] = []
     @Published var selectedFile: AudioFile?
     @Published var searchText: String = ""
     @Published var isInspectorPresented: Bool = false
     @Published var processingState: ProcessingState = .idle
+    @Published private(set) var notificationPermissionState: NotificationPermissionState = .unknown
     @Published private(set) var lastCompletedOutputURL: URL?
     @Published var compression: CompressionSettings = .medium {
         didSet {
@@ -29,6 +30,9 @@ final class AudioAppState: ObservableObject {
     private let processor: any ExportProcessing
     private let notifier: any ExportNotifying
     private var fileChangeCancellables: [ObjectIdentifier: AnyCancellable] = [:]
+    private var exportTask: Task<Void, Never>?
+    private var activeExportID: UUID?
+    private var activeExportFiles: [AudioFile] = []
 
     init(
         processor: any ExportProcessing,
@@ -42,10 +46,6 @@ final class AudioAppState: ObservableObject {
         self.init(processor: AudioProcessor(), notifier: NotificationManager.shared)
     }
 
-    deinit {
-        fileChangeCancellables.removeAll()
-    }
-    
     /// File filtrati in base alla ricerca.
     var filteredFiles: [AudioFile] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -62,20 +62,56 @@ final class AudioAppState: ObservableObject {
     }
 
     var exportDestinationDefaults: ExportDestinationDefaults {
-        switch exportPreview.effectiveExportMode {
-        case .audioOnly:
+        let baseName = suggestedExportBaseName
+        switch exportPreview.outputFormat ?? .m4a {
+        case .m4a:
             return ExportDestinationDefaults(
-                fileName: "Export.m4a",
+                fileName: "\(baseName).m4a",
                 allowedContentTypes: [.mpeg4Audio],
                 message: "Salva come M4A (audio)"
             )
-        case .videoCompressed:
+        case .opus:
             return ExportDestinationDefaults(
-                fileName: "Export.mp4",
+                fileName: "\(baseName).opus",
+                // macOS associa oggi `.opus` al tipo Ogg la cui estensione
+                // preferita è `.ogg`; il tipo audio generico preserva invece
+                // il nome `.opus` proposto dal pannello.
+                allowedContentTypes: [.audio],
+                message: "Salva come Opus (audio)"
+            )
+        case .mp4:
+            return ExportDestinationDefaults(
+                fileName: "\(baseName).mp4",
                 allowedContentTypes: [.mpeg4Movie],
                 message: "Salva come MP4 compresso"
             )
+        case .source(let fileExtension):
+            let contentType = UTType(filenameExtension: fileExtension) ?? .audio
+            return ExportDestinationDefaults(
+                fileName: "\(baseName).\(fileExtension)",
+                allowedContentTypes: [contentType],
+                message: "Salva nel formato originale \(fileExtension.uppercased())"
+            )
         }
+    }
+
+    private var suggestedExportBaseName: String {
+        if audioFiles.count == 1, let file = audioFiles.first {
+            let sourceName = file.url.deletingPathExtension().lastPathComponent
+            if sourceName.isEmpty == false {
+                return "\(sourceName) esportato"
+            }
+        }
+
+        if audioFiles.count > 1 {
+            return "Unione \(audioFiles.count) file"
+        }
+
+        return "Esportazione"
+    }
+
+    var canModifyQueue: Bool {
+        processingState.isBusy == false
     }
 
     var isExportActionEnabled: Bool {
@@ -99,11 +135,54 @@ final class AudioAppState: ObservableObject {
     
     /// Sposta gli elementi nella lista in base alla gesture di reorder.
     func moveFiles(from offsets: IndexSet, to destination: Int) {
+        guard canModifyQueue else { return }
         audioFiles.move(fromOffsets: offsets, toOffset: destination)
         markReadyForNextExport()
     }
+
+    /// Riordina usando identificatori stabili, come richiesto dal drag di una Table.
+    func moveFiles(withIDs ids: [AudioFile.ID], to destination: Int) {
+        guard canModifyQueue, (0...audioFiles.count).contains(destination) else { return }
+
+        let requestedIDs = Set(ids)
+        let offsets = IndexSet(audioFiles.indices.filter { requestedIDs.contains(audioFiles[$0].id) })
+        guard offsets.isEmpty == false else { return }
+
+        audioFiles.move(fromOffsets: offsets, toOffset: destination)
+        markReadyForNextExport()
+    }
+
+    /// Sposta ogni blocco selezionato di una posizione, per menu contestuale,
+    /// tastiera e tecnologie assistive. L'ordine relativo resta stabile.
+    func moveFiles(withIDs ids: Set<AudioFile.ID>, by offset: Int) {
+        guard canModifyQueue, offset == -1 || offset == 1 else { return }
+        let selectedIDs = ids.intersection(audioFiles.map(\.id))
+        guard selectedIDs.isEmpty == false else { return }
+
+        var didMove = false
+        if offset < 0 {
+            for index in audioFiles.indices where selectedIDs.contains(audioFiles[index].id) {
+                guard index > audioFiles.startIndex,
+                      selectedIDs.contains(audioFiles[index - 1].id) == false else { continue }
+                audioFiles.swapAt(index, index - 1)
+                didMove = true
+            }
+        } else {
+            for index in audioFiles.indices.reversed() where selectedIDs.contains(audioFiles[index].id) {
+                guard index < audioFiles.index(before: audioFiles.endIndex),
+                      selectedIDs.contains(audioFiles[index + 1].id) == false else { continue }
+                audioFiles.swapAt(index, index + 1)
+                didMove = true
+            }
+        }
+
+        if didMove {
+            markReadyForNextExport()
+        }
+    }
     
     func clearAll() {
+        guard canModifyQueue else { return }
         audioFiles.removeAll()
         fileChangeCancellables.removeAll()
         selectedFile = nil
@@ -111,6 +190,7 @@ final class AudioAppState: ObservableObject {
     }
     
     func addFiles(_ files: [AudioFile]) {
+        guard canModifyQueue, files.isEmpty == false else { return }
         observe(files)
         audioFiles.append(contentsOf: files)
         if selectedFile == nil {
@@ -120,6 +200,7 @@ final class AudioAppState: ObservableObject {
     }
     
     func remove(_ file: AudioFile) {
+        guard canModifyQueue else { return }
         audioFiles.removeAll { $0 == file }
         stopObserving(file)
         if selectedFile == file {
@@ -129,6 +210,8 @@ final class AudioAppState: ObservableObject {
     }
     
     func remove(atOffsets offsets: IndexSet) {
+        guard canModifyQueue,
+              offsets.allSatisfy(audioFiles.indices.contains(_:)) else { return }
         let removedFiles = offsets.map { audioFiles[$0] }
         audioFiles.remove(atOffsets: offsets)
         removedFiles.forEach(stopObserving(_:))
@@ -139,6 +222,7 @@ final class AudioAppState: ObservableObject {
     }
     
     func rename(_ file: AudioFile, to newName: String) {
+        guard canModifyQueue else { return }
         let originalURL = file.url
         let ext = originalURL.pathExtension
         guard let proposedName = sanitizedFileName(from: newName, originalExtension: ext) else { return }
@@ -163,7 +247,7 @@ final class AudioAppState: ObservableObject {
     /// Avvia l'export usando ffmpeg. Richiede almeno un file in coda.
     func startExport(to outputURL: URL) {
         guard audioFiles.isEmpty == false else { return }
-        guard processingState.canStartNewExport else { return }
+        guard processingState.canStartNewExport, exportTask == nil else { return }
 
         let preview = exportPreview
         guard preview.canExport, let exportJob = preview.exportJob else {
@@ -172,43 +256,98 @@ final class AudioAppState: ObservableObject {
             }
             return
         }
+        guard exportJob.outputFormat.accepts(outputURL) else {
+            processingState = .failed(
+                message: "L’estensione scelta non è compatibile con il formato di esportazione."
+            )
+            return
+        }
         
         lastCompletedOutputURL = nil
         processingState = .running(progress: 0)
-        let fileURLs = audioFiles.map(\.url)
+        let exportID = UUID()
+        let inputFiles = audioFiles
+        let fileURLs = inputFiles.map(\.url)
         let processor = self.processor
+        activeExportID = exportID
+        activeExportFiles = inputFiles
+        notifier.prepareForExportNotifications()
+        refreshNotificationPermission()
         
-        Task {
+        exportTask = Task { [weak self] in
+            guard let self else { return }
+            guard Task.isCancelled == false else {
+                self.finishExport(
+                    id: exportID,
+                    outputURL: outputURL,
+                    result: .failure(.cancelled)
+                )
+                return
+            }
+            let outputHasSecurityScope = outputURL.startAccessingSecurityScopedResource()
+            defer {
+                if outputHasSecurityScope {
+                    outputURL.stopAccessingSecurityScopedResource()
+                }
+            }
+
             let result = await processor.process(
                 fileURLs: fileURLs,
                 outputURL: outputURL,
                 job: exportJob,
                 estimatedTotalDuration: preview.totalDuration,
-                progressCallback: { @MainActor progress in
+                progressCallback: { @MainActor [weak self] progress in
+                    guard let self, self.activeExportID == exportID else { return }
                     self.updateProgress(progress)
                 }
             )
-            
-            switch result {
-            case .success:
-                lastCompletedOutputURL = outputURL
-                processingState = .completed
-                notifier.notifyExportFinished(outputURL: outputURL)
-            case .failure(let error):
-                if case .cancelled = error {
-                    return
-                }
-                processingState = .failed(message: error.localizedDescription)
-            }
+
+            self.finishExport(
+                id: exportID,
+                outputURL: outputURL,
+                result: result
+            )
         }
+    }
+
+    func refreshNotificationPermission() {
+        let notifier = self.notifier
+        Task {
+            notificationPermissionState = await notifier.notificationPermissionState()
+        }
+    }
+
+    func requestNotificationPermission() {
+        let notifier = self.notifier
+        Task {
+            notificationPermissionState = await notifier.requestNotificationPermission()
+        }
+    }
+
+    func openNotificationSettings() {
+        notifier.openNotificationSettings()
     }
     
     func cancelExport() {
-        Task {
-            await processor.cancel()
-            if case .running = processingState {
-                processingState = .idle
-            }
+        guard exportTask != nil else { return }
+        Task { [weak self] in
+            await self?.cancelExportAndWait()
+        }
+    }
+
+    func cancelExportAndWait() async {
+        guard let exportID = activeExportID,
+              let task = exportTask else { return }
+
+        task.cancel()
+        await processor.cancel()
+        await task.value
+
+        // Fallback per processor di test o implementazioni alternative che non
+        // restituiscano esplicitamente `.cancelled` dopo il proprio cleanup.
+        if activeExportID == exportID {
+            resetActiveExport()
+            processingState = .idle
         }
     }
     
@@ -219,10 +358,38 @@ final class AudioAppState: ObservableObject {
         guard abs(clampedProgress - currentProgress) >= 0.01 || clampedProgress >= 1 else { return }
         processingState = .running(progress: clampedProgress)
     }
+
+    private func finishExport(
+        id: UUID,
+        outputURL: URL,
+        result: Result<Void, AudioProcessor.ProcessError>
+    ) {
+        guard activeExportID == id else { return }
+        defer { resetActiveExport() }
+
+        switch result {
+        case .success:
+            lastCompletedOutputURL = outputURL
+            processingState = .completed
+            notifier.notifyExportFinished(outputURL: outputURL)
+        case .failure(let error):
+            if case .cancelled = error {
+                processingState = .idle
+            } else {
+                processingState = .failed(message: error.localizedDescription)
+            }
+        }
+    }
+
+    private func resetActiveExport() {
+        exportTask = nil
+        activeExportID = nil
+        activeExportFiles.removeAll()
+    }
     
     private func markReadyForNextExport() {
         normalizeExportModeIfNeeded()
-        if case .running = processingState { return }
+        if processingState.isBusy { return }
         lastCompletedOutputURL = nil
         if processingState != .idle {
             processingState = .idle
@@ -359,7 +526,7 @@ struct CompressionSettings: Equatable, Sendable {
 }
 
 enum SampleRate: String, CaseIterable, Identifiable, Sendable {
-    case s44100 = "44.1 kHz"
+    case s44100 = "44,1 kHz"
     case s48000 = "48 kHz"
     var id: String { rawValue }
 }
@@ -368,7 +535,7 @@ enum Codec: String, CaseIterable, Identifiable, Sendable {
     case aac = "AAC"
     case alac = "ALAC"
     case opus = "Opus"
-    case copy = "Copia Stream"
+    case copy = "Copia diretta"
     var id: String { rawValue }
 }
 

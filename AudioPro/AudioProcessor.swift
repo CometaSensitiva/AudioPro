@@ -31,26 +31,35 @@ actor AudioProcessor: ExportProcessing {
         case ffmpegNotExecutable
         case ffmpegIntegrityCheckFailed
         case ffmpegFailed(String)
+        case exportAlreadyRunning
         case unsupportedCommandConfiguration(String)
         case fileCreationFailed
+        case outputPreparationFailed(String)
+        case outputCommitFailed(String)
         case cancelled
 
         var errorDescription: String? {
             switch self {
             case .ffmpegNotFound:
-                return "ffmpeg non trovato nel bundle dell'app"
+                return "FFmpeg non è disponibile nell’app."
             case .ffmpegNotExecutable:
-                return "Il binario ffmpeg nel bundle non è eseguibile"
+                return "Il componente FFmpeg incluso nell’app non è eseguibile."
             case .ffmpegIntegrityCheckFailed:
-                return "Il binario ffmpeg nel bundle non supera il controllo di integrita"
-            case .ffmpegFailed(let message):
-                return "Errore ffmpeg: \(message)"
+                return "Il componente FFmpeg incluso nell’app non supera il controllo di integrità."
+            case .ffmpegFailed:
+                return "FFmpeg non è riuscito a completare l’esportazione. Verifica i file sorgente e riprova."
+            case .exportAlreadyRunning:
+                return "Un’altra esportazione è già in corso."
             case .unsupportedCommandConfiguration(let message):
                 return message
             case .fileCreationFailed:
-                return "Impossibile creare il file temporaneo"
+                return "Impossibile creare il file temporaneo."
+            case .outputPreparationFailed(let message):
+                return "Impossibile preparare l’esportazione: \(message)"
+            case .outputCommitFailed(let message):
+                return "Impossibile salvare l’esportazione: \(message)"
             case .cancelled:
-                return "Operazione annullata"
+                return "Operazione annullata."
             }
         }
     }
@@ -66,6 +75,10 @@ actor AudioProcessor: ExportProcessing {
         estimatedTotalDuration: Double? = nil,
         progressCallback: ExportProgressCallback? = nil
     ) async -> Result<Void, ProcessError> {
+        guard Task.isCancelled == false else {
+            return .failure(.cancelled)
+        }
+
         let ffmpegPath: String
         switch Self.getFFmpegPath(verifier: verifier) {
         case .success(let path):
@@ -74,11 +87,32 @@ actor AudioProcessor: ExportProcessing {
             return .failure(error)
         }
 
+        let transaction: ExportOutputTransaction
+        do {
+            transaction = try ExportOutputTransaction(destinationURL: outputURL)
+        } catch {
+            return .failure(.outputPreparationFailed(error.localizedDescription))
+        }
+        defer {
+            transaction.discard()
+        }
+
+        let stagedFileURLs: [URL]
+        do {
+            stagedFileURLs = try transaction.stageInputs(fileURLs)
+        } catch {
+            return .failure(.outputPreparationFailed(error.localizedDescription))
+        }
+
+        guard Task.isCancelled == false else {
+            return .failure(.cancelled)
+        }
+
         let arguments: [String]
         do {
             arguments = try FFmpegCommandBuilder.makeArguments(
-                fileURLs: fileURLs,
-                outputURL: outputURL,
+                fileURLs: stagedFileURLs,
+                outputURL: transaction.stagingURL,
                 job: job
             )
         } catch let error as FFmpegCommandBuilder.BuilderError {
@@ -87,13 +121,32 @@ actor AudioProcessor: ExportProcessing {
             return .failure(.unsupportedCommandConfiguration(error.localizedDescription))
         }
 
-        return await runner.run(
+        guard Task.isCancelled == false else {
+            return .failure(.cancelled)
+        }
+
+        let result = await runner.run(
             path: ffmpegPath,
             arguments: arguments,
-            inputCount: fileURLs.count,
+            inputCount: stagedFileURLs.count,
             estimatedTotalDuration: estimatedTotalDuration ?? 0,
             progressCallback: progressCallback
         )
+
+        switch result {
+        case .success:
+            guard Task.isCancelled == false else {
+                return .failure(.cancelled)
+            }
+            do {
+                try transaction.commit()
+                return .success(())
+            } catch {
+                return .failure(.outputCommitFailed(error.localizedDescription))
+            }
+        case .failure(let error):
+            return .failure(error)
+        }
     }
 
     private nonisolated static func getFFmpegPath(

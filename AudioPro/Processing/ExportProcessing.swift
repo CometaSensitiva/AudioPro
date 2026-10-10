@@ -2,7 +2,7 @@ import Foundation
 
 typealias ExportProgressCallback = @MainActor @Sendable (Double) -> Void
 
-protocol ExportProcessing: Sendable {
+nonisolated protocol ExportProcessing: Sendable {
     func cancel() async
 
     func process(
