@@ -41,4 +41,4 @@ xcodebuild test -project AudioPro.xcodeproj -scheme AudioPro \
 
 The release script creates a universal ZIP and `SHA256SUMS.txt` in `dist/`. A pushed `v*` tag runs tests, builds the archive and publishes a GitHub Release; a manual workflow run only builds artifacts.
 
-[Development and release details](docs/development.md) · [Architecture](docs/architecture.md) · [Changelog](CHANGELOG.md) · [MIT license](LICENSE). Bundled third-party tools retain their own licenses.
+[Development and release details](docs/development.md) · [Architecture](docs/architecture.md) · [Changelog](CHANGELOG.md) · [MIT license](LICENSE). Bundled third-party tools keep their own licenses: FFmpeg is distributed under the GPL ([notice and sources](AudioPro/Resources/ThirdPartyNotices/FFmpeg-NOTICE.txt)).

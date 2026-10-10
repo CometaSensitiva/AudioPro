@@ -1,0 +1,33 @@
+FFmpeg
+======
+
+AudioPro includes unmodified FFmpeg command-line binaries, which it runs as a
+separate process to merge, convert and compress audio and video:
+
+  ffmpeg-binary-arm64   FFmpeg 8.0.1, static build by Martin Riedl
+                        https://ffmpeg.martin-riedl.de
+                        Licensed under the GNU GPL, version 2 or later.
+
+  ffmpeg-binary-x86_64  FFmpeg N-121793-g1eb2cbd865, static build by
+                        Helmut K. C. Tessarek
+                        https://evermeet.cx/ffmpeg/
+                        Licensed under the GNU GPL, version 3.
+
+Both builds are configured with --enable-gpl (they include, among others,
+x264 and x265), so the binaries are distributed under the GNU General Public
+License. The full text of GPL version 3 is in FFmpeg-GPL-3.0.txt.
+
+FFmpeg is a trademark of Fabrice Bellard, originator of the FFmpeg project.
+https://ffmpeg.org
+
+Source code
+-----------
+
+  FFmpeg 8.0.1 release:  https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz
+  FFmpeg commit 1eb2cbd865:
+                         https://git.ffmpeg.org/gitweb/ffmpeg.git/commit/1eb2cbd865
+  Build scripts and the sources of the bundled libraries are published by
+  the build providers at the addresses above.
+
+AudioPro's own code is released under the MIT License (see LICENSE in the
+repository). The FFmpeg binaries keep their own license.

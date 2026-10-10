@@ -41,4 +41,4 @@ xcodebuild test -project AudioPro.xcodeproj -scheme AudioPro \
 
 Lo script crea uno ZIP universale e `SHA256SUMS.txt` in `dist/`. Un tag `v*` pubblicato avvia i test, genera l’archivio e pubblica una GitHub Release; l’avvio manuale del workflow genera solo gli artefatti.
 
-[Dettagli di sviluppo e release](docs/development.md) (in inglese) · [Architettura](docs/architecture.md) · [Changelog](CHANGELOG.md) · [Licenza MIT](LICENSE). Gli strumenti di terze parti mantengono le proprie licenze.
+[Dettagli di sviluppo e release](docs/development.md) (in inglese) · [Architettura](docs/architecture.md) · [Changelog](CHANGELOG.md) · [Licenza MIT](LICENSE). Gli strumenti di terze parti mantengono le proprie licenze: FFmpeg è distribuito con licenza GPL ([avviso e sorgenti](AudioPro/Resources/ThirdPartyNotices/FFmpeg-NOTICE.txt)).
