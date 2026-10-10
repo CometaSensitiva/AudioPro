@@ -103,4 +103,18 @@ final class SRTParserTests: XCTestCase {
         XCTAssertEqual(cues.count, 1)
         XCTAssertEqual(cues[0].text, "Testo")
     }
+
+    func testCleansCommonSubtitleFormattingWithoutFlatteningLines() {
+        let source = """
+        1
+        00:00:01,000 --> 00:00:03,000
+        {\\an8}<i>Prima riga</i>
+        <font color="#fff">Seconda &amp; terza</font>
+        """
+
+        let cues = SRTParser.parse(source)
+
+        XCTAssertEqual(cues.count, 1)
+        XCTAssertEqual(cues[0].text, "Prima riga\nSeconda & terza")
+    }
 }

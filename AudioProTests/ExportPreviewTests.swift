@@ -31,6 +31,7 @@ final class ExportPreviewTests: XCTestCase {
         let preview = ExportPreview.make(files: [file], compression: settings)
 
         XCTAssertEqual(preview.effectiveCodec, .copy)
+        XCTAssertEqual(preview.outputFormat, .source(fileExtension: "m4a"))
         XCTAssertEqual(preview.bitrateLabel, "Originale")
         XCTAssertNotNil(preview.estimatedOutputSizeMB)
         XCTAssertEqual(preview.estimatedOutputSizeMB ?? 0, 8.5, accuracy: 0.001)
@@ -60,6 +61,7 @@ final class ExportPreviewTests: XCTestCase {
         let preview = ExportPreview.make(files: files, compression: settings)
 
         XCTAssertEqual(preview.effectiveCodec, .aac)
+        XCTAssertEqual(preview.outputFormat, .m4a)
         XCTAssertTrue(preview.usesMergeReencodeFallback)
         XCTAssertEqual(preview.bitrateLabel, "96 kbps")
     }
@@ -75,12 +77,12 @@ final class ExportPreviewTests: XCTestCase {
         XCTAssertTrue(preview.isVideoModeActive)
         XCTAssertEqual(preview.effectiveExportMode, .videoCompressed)
         XCTAssertEqual(preview.compressionSummary, VideoCompressionPreset.teamsLecture.summary)
-        // Preset fisso 1500 kbps: 2400 s -> (1500 * 2400) / 8000 = 450 MB,
-        // risparmio su 600 MB di sorgente = 25%.
-        XCTAssertEqual(preview.estimatedOutputSizeMB ?? 0, 450, accuracy: 0.001)
-        XCTAssertEqual(preview.savingsRatio ?? 0, 0.25, accuracy: 0.001)
-        XCTAssertEqual(preview.estimatedOutputLabel, "~450.00 MB")
-        XCTAssertEqual(preview.savingsLabel, "~25%")
+        XCTAssertEqual(preview.outputFormat, .mp4)
+        // Preset fisso 1500 kbps video + 128 kbps audio AAC.
+        XCTAssertEqual(preview.estimatedOutputSizeMB ?? 0, 488.4, accuracy: 0.001)
+        XCTAssertEqual(preview.savingsRatio ?? 0, 0.186, accuracy: 0.001)
+        XCTAssertEqual(preview.estimatedOutputLabel, "≈488.40 MB")
+        XCTAssertEqual(preview.savingsLabel, "≈19%")
     }
 
     func testVideoModeEstimateNeedsDuration() {
@@ -114,8 +116,122 @@ final class ExportPreviewTests: XCTestCase {
         XCTAssertEqual(preview.effectiveExportMode, .audioOnly)
         XCTAssertEqual(
             preview.videoModeAvailabilityMessage,
-            "Video compresso e disponibile solo con un singolo file video. Con piu file o sorgenti miste l'export resta solo audio."
+            "La modalità Video compresso è disponibile solo con un singolo file video. Con più file o sorgenti miste, l’esportazione resta solo audio."
         )
+    }
+
+    func testAudioOnlyMP4DoesNotEnableVideoCompression() {
+        let file = mockFile(
+            name: "audio-only.mp4",
+            duration: 60,
+            size: 4_000_000,
+            codec: "aac "
+        )
+        file.hasAudioTrack = true
+        file.hasVideoTrack = false
+
+        let preview = ExportPreview.make(files: [file], compression: .medium)
+
+        XCTAssertFalse(file.isVideo)
+        XCTAssertFalse(preview.isVideoCompressionEligible)
+        XCTAssertEqual(preview.effectiveExportMode, .audioOnly)
+        XCTAssertEqual(preview.validation, .ready)
+    }
+
+    func testAudioExportRejectsInputWithoutAudioButVideoModeAllowsIt() {
+        let file = mockFile(
+            name: "silent-video.mp4",
+            duration: 60,
+            size: 8_000_000,
+            codec: ""
+        )
+        file.hasAudioTrack = false
+        file.hasVideoTrack = true
+
+        let audioPreview = ExportPreview.make(files: [file], compression: .medium)
+        XCTAssertFalse(audioPreview.canExport)
+        guard case .failedPreflight(let message) = audioPreview.validation else {
+            return XCTFail("Expected missing-audio preflight failure")
+        }
+        XCTAssertTrue(message.contains("traccia audio"))
+
+        var videoSettings = CompressionSettings.medium
+        videoSettings.exportMode = .videoCompressed
+        let videoPreview = ExportPreview.make(files: [file], compression: videoSettings)
+        XCTAssertTrue(videoPreview.canExport)
+        XCTAssertEqual(videoPreview.effectiveExportMode, .videoCompressed)
+    }
+
+    func testOpusUsesOpusContainer() {
+        var settings = CompressionSettings.medium
+        settings.codec = .opus
+
+        let preview = ExportPreview.make(
+            files: [mockFile(name: "lesson.wav", duration: 60, size: 8_000_000, codec: "lpcm")],
+            compression: settings
+        )
+
+        XCTAssertEqual(preview.validation, .ready)
+        XCTAssertEqual(preview.outputFormat, .opus)
+        guard case .audio(let jobSettings)? = preview.exportJob else {
+            return XCTFail("Expected an audio export job")
+        }
+        XCTAssertEqual(jobSettings.outputFormat, .opus)
+        XCTAssertEqual(jobSettings.codec, "libopus")
+    }
+
+    func testSingleFileCopyPreservesSourceExtension() {
+        var settings = CompressionSettings.medium
+        settings.codec = .copy
+
+        let preview = ExportPreview.make(
+            files: [mockFile(name: "recording.wav", duration: 60, size: 8_000_000, codec: "lpcm")],
+            compression: settings
+        )
+
+        XCTAssertEqual(preview.validation, .ready)
+        XCTAssertEqual(preview.outputFormat, .source(fileExtension: "wav"))
+        guard case .audio(let jobSettings)? = preview.exportJob else {
+            return XCTFail("Expected an audio export job")
+        }
+        XCTAssertEqual(jobSettings.outputFormat, .source(fileExtension: "wav"))
+        XCTAssertEqual(jobSettings.codec, "copy")
+    }
+
+    func testCopyWithoutSafeSourceExtensionFailsPreflight() {
+        var settings = CompressionSettings.medium
+        settings.codec = .copy
+        let file = mockFile(name: "recording", duration: 60, size: 8_000_000, codec: "lpcm")
+
+        let preview = ExportPreview.make(files: [file], compression: settings)
+
+        XCTAssertFalse(preview.canExport)
+        XCTAssertNil(preview.outputFormat)
+        XCTAssertNil(preview.exportJob)
+        guard case .failedPreflight = preview.validation else {
+            return XCTFail("Expected a failed preflight")
+        }
+    }
+
+    func testALACTargetSizeFailsPreflightInsteadOfAdvertisingLossyBitrate() {
+        var settings = CompressionSettings.medium
+        settings.codec = .alac
+        settings.maxOutputSizeMB = 20
+
+        let preview = ExportPreview.make(
+            files: [mockFile(name: "lesson.wav", duration: 60, size: 8_000_000, codec: "lpcm")],
+            compression: settings
+        )
+
+        XCTAssertFalse(preview.canExport)
+        XCTAssertEqual(preview.outputFormat, .m4a)
+        XCTAssertNil(preview.resolvedBitrateKbps)
+        XCTAssertNil(preview.targetSizeMB)
+        XCTAssertNil(preview.exportJob)
+        guard case .failedPreflight(let message) = preview.validation else {
+            return XCTFail("Expected a failed preflight")
+        }
+        XCTAssertTrue(message.contains("ALAC"))
     }
 
     private func mockFile(name: String, duration: TimeInterval, size: Int64, codec: String) -> AudioFile {

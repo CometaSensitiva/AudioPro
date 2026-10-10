@@ -10,7 +10,7 @@ final class PlayerVideoViewTests: XCTestCase {
         let view = PlayerVideoNSView(player: player)
 
         XCTAssertTrue(view.player === player)
-        XCTAssertEqual(view.controlsStyle, .inline)
+        XCTAssertEqual(view.controlsStyle, .floating)
         XCTAssertEqual(view.videoGravity, .resizeAspect)
         XCTAssertTrue(view.showsFullScreenToggleButton)
     }
@@ -27,6 +27,33 @@ final class PlayerVideoViewTests: XCTestCase {
         let playerView = findPlayerView(in: hostingView)
         XCTAssertNotNil(playerView)
         XCTAssertTrue(playerView?.player === player)
+    }
+
+    func testVideoSizeModesHaveStableLabelsAndResponsiveHeights() {
+        let generousContainer = CGSize(width: 1_200, height: 900)
+
+        XCTAssertEqual(PlayerVideoSizeMode.allCases.map(\.displayName), [
+            "Piccolo",
+            "Medio",
+            "Grande",
+            "Teatro"
+        ])
+        XCTAssertLessThan(
+            PlayerVideoSizeMode.small.frame(in: generousContainer, aspectRatio: 16 / 9).height,
+            PlayerVideoSizeMode.medium.frame(in: generousContainer, aspectRatio: 16 / 9).height
+        )
+        XCTAssertLessThan(
+            PlayerVideoSizeMode.medium.frame(in: generousContainer, aspectRatio: 16 / 9).height,
+            PlayerVideoSizeMode.large.frame(in: generousContainer, aspectRatio: 16 / 9).height
+        )
+        XCTAssertGreaterThan(
+            PlayerVideoSizeMode.theater.frame(in: generousContainer, aspectRatio: 16 / 9).height,
+            PlayerVideoSizeMode.large.frame(in: generousContainer, aspectRatio: 16 / 9).height
+        )
+        XCTAssertEqual(
+            PlayerVideoSizeMode.mode(forStoredRawValue: "fit"),
+            .theater
+        )
     }
 
     private func findPlayerView(in view: NSView) -> AVPlayerView? {

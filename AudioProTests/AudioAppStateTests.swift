@@ -26,6 +26,50 @@ final class AudioAppStateTests: XCTestCase {
         }
     }
 
+    private actor BlockingProcessor: ExportProcessing {
+        private var continuation: CheckedContinuation<Result<Void, AudioProcessor.ProcessError>, Never>?
+        private var hasStarted = false
+
+        func cancel() async {
+            let continuation = self.continuation
+            self.continuation = nil
+            continuation?.resume(returning: .failure(.cancelled))
+        }
+
+        func process(
+            fileURLs: [URL],
+            outputURL: URL,
+            job: ExportJob,
+            estimatedTotalDuration: Double?,
+            progressCallback: ExportProgressCallback?
+        ) async -> Result<Void, AudioProcessor.ProcessError> {
+            hasStarted = true
+            return await withCheckedContinuation { continuation in
+                self.continuation = continuation
+            }
+        }
+
+        func waitUntilStarted() async {
+            while hasStarted == false {
+                await Task.yield()
+            }
+        }
+    }
+
+    private actor CancellationAwareProcessor: ExportProcessing {
+        func cancel() async {}
+
+        func process(
+            fileURLs: [URL],
+            outputURL: URL,
+            job: ExportJob,
+            estimatedTotalDuration: Double?,
+            progressCallback: ExportProgressCallback?
+        ) async -> Result<Void, AudioProcessor.ProcessError> {
+            Task.isCancelled ? .failure(.cancelled) : .success(())
+        }
+    }
+
     private final class SpyNotifier: ExportNotifying {
         private(set) var notifiedURL: URL?
 
@@ -64,6 +108,45 @@ final class AudioAppStateTests: XCTestCase {
         state.moveFiles(from: IndexSet(integer: 0), to: 1)
         
         XCTAssertEqual(state.processingState, .idle)
+    }
+
+    func testMoveFilesWithStableIDsPreservesRelativeOrder() {
+        let state = AudioAppState()
+        let files = mockFiles(names: ["a.m4a", "b.m4a", "c.m4a", "d.m4a"])
+        state.addFiles(files)
+
+        state.moveFiles(withIDs: [files[1].id, files[3].id], to: 0)
+
+        XCTAssertEqual(state.audioFiles.map(\.name), ["b.m4a", "d.m4a", "a.m4a", "c.m4a"])
+    }
+
+    func testMoveFilesWithStableIDsMovesSelectionTowardEnd() {
+        let state = AudioAppState()
+        let files = mockFiles(names: ["a.m4a", "b.m4a", "c.m4a", "d.m4a"])
+        state.addFiles(files)
+
+        state.moveFiles(withIDs: [files[1].id, files[2].id], to: 4)
+
+        XCTAssertEqual(state.audioFiles.map(\.name), ["a.m4a", "d.m4a", "b.m4a", "c.m4a"])
+    }
+
+    func testMoveFilesByOnePreservesSelectedBlockOrder() {
+        let state = AudioAppState()
+        let files = mockFiles(names: ["a.m4a", "b.m4a", "c.m4a", "d.m4a"])
+        state.addFiles(files)
+
+        state.moveFiles(withIDs: [files[1].id, files[2].id], by: 1)
+
+        XCTAssertEqual(state.audioFiles.map(\.name), ["a.m4a", "d.m4a", "b.m4a", "c.m4a"])
+    }
+
+    func testMoveFilesWithUnknownIDsLeavesQueueUnchanged() {
+        let state = AudioAppState()
+        state.addFiles(mockFiles(names: ["a.m4a", "b.m4a"]))
+
+        state.moveFiles(withIDs: [UUID()], to: 0)
+
+        XCTAssertEqual(state.audioFiles.map(\.name), ["a.m4a", "b.m4a"])
     }
 
     func testRenameRejectsPathTraversalLikeNames() throws {
@@ -116,7 +199,7 @@ final class AudioAppStateTests: XCTestCase {
         XCTAssertFalse(state.exportPreview.canExport)
         XCTAssertEqual(
             state.exportPreview.validation,
-            .loadingMetadata(message: "Attendi il completamento dell'analisi file per calcolare il target in MB.")
+            .loadingMetadata(message: "Attendi il completamento dell’analisi dei file per calcolare la dimensione massima.")
         )
     }
 
@@ -188,13 +271,84 @@ final class AudioAppStateTests: XCTestCase {
         state.addFiles([video])
         state.compression.exportMode = .videoCompressed
 
-        XCTAssertEqual(state.exportDestinationDefaults.fileName, "Export.mp4")
+        XCTAssertEqual(state.exportDestinationDefaults.fileName, "lesson esportato.mp4")
         XCTAssertEqual(state.exportDestinationDefaults.allowedContentTypes, [.mpeg4Movie])
 
         state.compression.exportMode = .audioOnly
 
-        XCTAssertEqual(state.exportDestinationDefaults.fileName, "Export.m4a")
+        XCTAssertEqual(state.exportDestinationDefaults.fileName, "lesson esportato.m4a")
         XCTAssertEqual(state.exportDestinationDefaults.allowedContentTypes, [.mpeg4Audio])
+    }
+
+    func testExportDestinationDefaultsFollowCodecAndCopyContainer() {
+        let opusState = AudioAppState()
+        opusState.addFiles(mockFiles(names: ["voice.wav"]))
+        opusState.compression.codec = .opus
+
+        XCTAssertEqual(opusState.exportDestinationDefaults.fileName, "voice esportato.opus")
+        XCTAssertEqual(opusState.exportDestinationDefaults.allowedContentTypes, [.audio])
+
+        let copyState = AudioAppState()
+        copyState.addFiles(mockFiles(names: ["voice.wav"]))
+        copyState.compression.codec = .copy
+
+        XCTAssertEqual(copyState.exportDestinationDefaults.fileName, "voice esportato.wav")
+        XCTAssertEqual(
+            copyState.exportDestinationDefaults.allowedContentTypes.first?.preferredFilenameExtension,
+            "wav"
+        )
+    }
+
+    func testQueueMutationsAreFrozenUntilCancelledExportFinishes() async {
+        let processor = BlockingProcessor()
+        let notifier = SpyNotifier()
+        let state = AudioAppState(processor: processor, notifier: notifier)
+        let (realFile, originalURL, directoryURL) = try! makeTemporaryAudioFile(named: "a.m4a")
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let files = [realFile, mockFiles(names: ["b.m4a"])[0]]
+        files.forEach { $0.metadataState = .ready }
+        state.addFiles(files)
+
+        state.startExport(to: URL(fileURLWithPath: "/tmp/frozen-export.m4a"))
+        await processor.waitUntilStarted()
+
+        state.moveFiles(withIDs: [files[0].id], to: 2)
+        state.remove(files[0])
+        state.addFiles(mockFiles(names: ["c.m4a"]))
+        state.clearAll()
+        state.rename(files[0], to: "renamed")
+
+        XCTAssertEqual(state.audioFiles.map(\.name), ["a.m4a", "b.m4a"])
+        XCTAssertEqual(realFile.url, originalURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: originalURL.path))
+        XCTAssertTrue(state.canModifyQueue == false)
+
+        await state.cancelExportAndWait()
+
+        XCTAssertEqual(state.processingState, .idle)
+        XCTAssertTrue(state.canModifyQueue)
+        XCTAssertNil(notifier.notifiedURL)
+    }
+
+    func testImmediateCancellationStopsExportBeforeProcessorLaunch() async {
+        let notifier = SpyNotifier()
+        let state = AudioAppState(
+            processor: CancellationAwareProcessor(),
+            notifier: notifier
+        )
+        let file = AudioFile(
+            url: URL(fileURLWithPath: "/tmp/immediate-cancel.m4a"),
+            loadMetadata: false
+        )
+        file.metadataState = .ready
+        state.addFiles([file])
+
+        state.startExport(to: URL(fileURLWithPath: "/tmp/immediate-output.m4a"))
+        await state.cancelExportAndWait()
+
+        XCTAssertEqual(state.processingState, .idle)
+        XCTAssertNil(state.lastCompletedOutputURL)
+        XCTAssertNil(notifier.notifiedURL)
     }
 
     func testStartExportUsesInjectedProcessorAndNotifier() async {
@@ -208,11 +362,10 @@ final class AudioAppStateTests: XCTestCase {
         let outputURL = URL(fileURLWithPath: "/tmp/export.m4a")
         state.startExport(to: outputURL)
 
-        for _ in 0..<20 {
-            if state.processingState == .completed {
-                break
-            }
-            await Task.yield()
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while ContinuousClock.now < deadline,
+              state.processingState != .completed {
+            try? await Task.sleep(for: .milliseconds(10))
         }
 
         let processedFileURLs = await processor.processedFileURLs

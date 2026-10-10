@@ -2,6 +2,16 @@ import XCTest
 @testable import AudioPro
 
 final class TranscriptionOutputWriterTests: XCTestCase {
+    func testClassifiesMissingOutputAsMissing() throws {
+        let directory = try makeTemporaryDirectory()
+        let missingURL = directory.appendingPathComponent("non-esiste.srt")
+
+        XCTAssertEqual(
+            TranscriptionOutputPathClassifier.kind(at: missingURL),
+            .missing
+        )
+    }
+
     func testWritesSRTAndTXTAsOneCompletedPair() throws {
         let directory = try makeTemporaryDirectory()
         let destination = TranscriptionDestination(
@@ -90,6 +100,94 @@ final class TranscriptionOutputWriterTests: XCTestCase {
         XCTAssertFalse(try directoryContainsTransactionFiles(directory))
     }
 
+    func testRejectsDirectoryOutputWithoutDeletingNestedContents() throws {
+        let directory = try makeTemporaryDirectory()
+        let destination = TranscriptionDestination(
+            directoryURL: directory,
+            baseName: "Lezione",
+            outputSelection: .srtOnly,
+            overwriteExisting: true
+        )
+        try FileManager.default.createDirectory(
+            at: destination.srtURL,
+            withIntermediateDirectories: true
+        )
+        let nestedURL = destination.srtURL.appendingPathComponent("appunti.txt")
+        try "da conservare".write(to: nestedURL, atomically: true, encoding: .utf8)
+
+        XCTAssertThrowsError(try TranscriptionOutputWriter().write(sampleOutput, to: destination)) { error in
+            XCTAssertEqual(
+                error as? TranscriptionOutputWriter.WriteError,
+                .unsupportedExistingOutput("Lezione.srt")
+            )
+        }
+
+        XCTAssertEqual(
+            TranscriptionOutputPathClassifier.kind(at: destination.srtURL),
+            .unsupported
+        )
+        XCTAssertEqual(try String(contentsOf: nestedURL, encoding: .utf8), "da conservare")
+        XCTAssertFalse(try directoryContainsTransactionFiles(directory))
+    }
+
+    func testRejectsSymbolicLinkOutputWithoutChangingLinkOrTarget() throws {
+        let directory = try makeTemporaryDirectory()
+        let destination = TranscriptionDestination(
+            directoryURL: directory,
+            baseName: "Lezione",
+            outputSelection: .srtOnly,
+            overwriteExisting: true
+        )
+        let targetURL = directory.appendingPathComponent("originale.srt")
+        try "target invariato".write(to: targetURL, atomically: true, encoding: .utf8)
+        try FileManager.default.createSymbolicLink(
+            at: destination.srtURL,
+            withDestinationURL: targetURL
+        )
+
+        XCTAssertThrowsError(try TranscriptionOutputWriter().write(sampleOutput, to: destination)) { error in
+            XCTAssertEqual(
+                error as? TranscriptionOutputWriter.WriteError,
+                .unsupportedExistingOutput("Lezione.srt")
+            )
+        }
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: destination.srtURL.path)
+        XCTAssertEqual(attributes[.type] as? FileAttributeType, .typeSymbolicLink)
+        XCTAssertEqual(try String(contentsOf: targetURL, encoding: .utf8), "target invariato")
+        XCTAssertFalse(try directoryContainsTransactionFiles(directory))
+    }
+
+    func testMixedRegularAndUnsupportedConflictsLeaveBothUntouched() throws {
+        let directory = try makeTemporaryDirectory()
+        let destination = TranscriptionDestination(
+            directoryURL: directory,
+            baseName: "Lezione",
+            overwriteExisting: true
+        )
+        try "srt originale".write(to: destination.srtURL, atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(
+            at: destination.txtURL,
+            withIntermediateDirectories: true
+        )
+        let nestedURL = destination.txtURL.appendingPathComponent("contenuto.txt")
+        try "cartella originale".write(to: nestedURL, atomically: true, encoding: .utf8)
+
+        XCTAssertThrowsError(try TranscriptionOutputWriter().write(sampleOutput, to: destination)) { error in
+            XCTAssertEqual(
+                error as? TranscriptionOutputWriter.WriteError,
+                .unsupportedExistingOutput("Lezione.txt")
+            )
+        }
+
+        XCTAssertEqual(
+            try String(contentsOf: destination.srtURL, encoding: .utf8),
+            "srt originale"
+        )
+        XCTAssertEqual(try String(contentsOf: nestedURL, encoding: .utf8), "cartella originale")
+        XCTAssertFalse(try directoryContainsTransactionFiles(directory))
+    }
+
     func testUnselectedExistingFileDoesNotConflictOrGetReplaced() throws {
         let directory = try makeTemporaryDirectory()
         let destination = TranscriptionDestination(
@@ -143,7 +241,7 @@ final class TranscriptionOutputWriterTests: XCTestCase {
             TranscriptionDestinationPicker.baseName(in: panel),
             "Audio 18 25-05-2026"
         )
-        XCTAssertTrue(panel.message.contains("richiede l'accesso"))
+        XCTAssertTrue(panel.message.contains("richiede l’accesso"))
         XCTAssertTrue(panel.message.contains(TranscriptionOutputSelection.srtAndTxt.creationDescription))
     }
 
