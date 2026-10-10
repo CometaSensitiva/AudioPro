@@ -30,11 +30,11 @@ nonisolated enum LocalTranscriptionState: Equatable, Sendable {
         case .selectingDestination:
             return "Scegli la cartella di destinazione."
         case .loadingModel:
-            return "Caricamento del modello Whisper locale..."
+            return "Caricamento del modello Whisper…"
         case .transcribing(let progress):
-            return "Trascrizione locale in corso: \(Int(progress * 100))%"
+            return "Trascrizione in corso: \(Int(progress * 100))%"
         case .cancelling:
-            return "Interruzione sicura e pulizia in corso..."
+            return "Interruzione e pulizia in corso…"
         case .completed(let result):
             let names = result.generatedURLs.map(\.lastPathComponent).joined(separator: ", ")
             return "Trascrizione salvata: \(names)"
